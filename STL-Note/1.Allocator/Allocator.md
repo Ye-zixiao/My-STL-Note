@@ -2,74 +2,35 @@
 
 #### 2.1 SGI STL空间分配器概览
 
+在SGI STL的实现中主要有如下几个空间分配器：
+
+1. 标准C++空间分配器`std::allocator`，实现在[defalloc.h](defalloc.h)
+2. SGI第一级空间分配器`__malloc_alloc_template`，实现在[stl_alloc.h](stl_alloc.h)
+3. SGI第二级空间分配器__default_alloc_template`，实现在[stl_alloc.h](stl_alloc.h)
+4. SGI一/二级空间分配器的别名`alloc`以及简单封装类`simple_alloc`，实现在[stl_alloc.h](stl_alloc.h)
+5. 由`alloc`实现的C++标准空间分配器`allocator`，实现在[stl_alloc.h](stl_alloc.h)，前提是需要使用到
+
+其中标准C++空间分配器`std::allocator`并不是默认的空间分配器，`alloc`才是真正默认空间分配器，然而`alloc`只不过是SGI第二级空间分配器`__default_alloc_template`的别名。在容器空间的分配中，则会使用到简单封装类模板`simple_alloc`，它又仅仅是`alloc`的简单封装，因此空间分配的真正操作者是`__default_alloc_template`这个分配器而不是其他，除非特别用户指定。
+
+SGI STL对空间分配器的实现主要是出于性能、效率和其他多种因素的考虑，它引入了一个双层级的空间分配器设计，**一级空间分配器指的是`__malloc_alloc_template`，二级空间分配器指的是`__default_alloc_template`。其中前者直接调用`malloc()`、`free()`和`realloc()`等函数来分配/销毁空间；而后者对于大于128字节空间的分配直接调用`__malloc_alloc_template`，而对于小于128字节空间的分配采用内存池策略，需要用时从内存池中取出，不需要时退回给内存池，从而避免内存碎片等多个问题**。正是这种设计的各种优点使得SGI STL将`__default_alloc_template`设置为默认的空间分配器。
+
+下面是所有空间分配器所起作用的大致结构：
+
+<img src="../../image/alloc.jpg" alt="alloc" style="zoom: 50%;" />
+
+
+
+为了实现紧密分工，STL allocator还将对象的空间分配/销毁以及对象的构造/析构两种操作分离开来实现。这使得`alloc`只负责对象空间的分配/销毁：`alloc::allocate()`、`alloc::deallocate()`，而对象构造和析构由进一步封装的类，比如上述由`alloc`实现的标准空间分配器`allocator`实现或者由STL算法`std::construct()`、`std::destroy()`来完成。
+
+其中`alloc`、一/二级空间分配器实现在[stl_alloc.h](stl_alloc.h)，STL算法`std::construct()`、`std::destroy()`实现在[stl_construct.h](stl_construct.h)，除此之外，STL还具有一些在已分配但未初始化的空间上进行拷贝构造、填充的算法`unintialized_xxx()`，它们实现在[stl_uninitialized.h](stl_uninitialized.h)，然后这些源文件全部include在标准C++头文件[memory](memory)中。文件分布如下：
+
+<img src="../../image/屏幕截图 2020-12-27 102048.png" alt="屏幕截图 2020-12-27 102048" style="zoom:80%;" />
+
 
 
 #### 2.2 空间分配/销毁和对象构造/析构
 
-默认的实现（g++3.3）
-
-```c++
-template <class _Tp>
-class allocator {
-  typedef alloc _Alloc;          // The underlying allocator.
-public:
-  typedef size_t     size_type;
-  typedef ptrdiff_t  difference_type;
-  typedef _Tp*       pointer;
-  typedef const _Tp* const_pointer;
-  typedef _Tp&       reference;
-  typedef const _Tp& const_reference;
-  typedef _Tp        value_type;
-
-  template <class _Tp1> struct rebind {
-    typedef allocator<_Tp1> other;
-  };
-
-  allocator() __STL_NOTHROW {}
-  allocator(const allocator&) __STL_NOTHROW {}
-  template <class _Tp1> allocator(const allocator<_Tp1>&) __STL_NOTHROW {}
-  ~allocator() __STL_NOTHROW {}
-
-  pointer address(reference __x) const { return &__x; }
-  const_pointer address(const_reference __x) const { return &__x; }
-
-  // __n is permitted to be 0.  The C++ standard says nothing about what
-  // the return value is when __n == 0.
-  _Tp* allocate(size_type __n, const void* = 0) {
-    return __n != 0 ? static_cast<_Tp*>(_Alloc::allocate(__n * sizeof(_Tp))) 
-                    : 0;
-  }
-
-  // __p is not permitted to be a null pointer.
-  void deallocate(pointer __p, size_type __n)
-    { _Alloc::deallocate(__p, __n * sizeof(_Tp)); }
-
-  size_type max_size() const __STL_NOTHROW 
-    { return size_t(-1) / sizeof(_Tp); }
-
-  void construct(pointer __p, const _Tp& __val) { new(__p) _Tp(__val); }
-  void destroy(pointer __p) { __p->~_Tp(); }
-};
-
-/* 特例化版本 */
-template<>
-class allocator<void> {
-public:
-  typedef size_t      size_type;
-  typedef ptrdiff_t   difference_type;
-  typedef void*       pointer;
-  typedef const void* const_pointer;
-  typedef void        value_type;
-
-  template <class _Tp1> struct rebind {
-    typedef allocator<_Tp1> other;
-  };
-};
-```
-
-
-
-std_construct.h中的部分内容：（通过查看当前版本的g++相关安装文件，我们仍然能够发现这种构造、析构方式仍然存在）
+在[stl_construct.h](stl_construct.h)中我们可以看到STL算法`construct()`就是直接通过定位new的方式实现，而`destroy()`通过`__type_traits`技术，识别出调用元素/迭代器指定范围内的元素的类型，判断出它们是否是POD类型（析构、构造函数trivial可有可无，没什么用），若是则什么也不做，否则逐个调用析构函数。
 
 ```c++
 //单元素构造
@@ -114,13 +75,15 @@ inline void _Destroy(_ForwardIterator __first, _ForwardIterator __last) {
 }
 ```
 
+<img src="../../image/屏幕截图 2020-12-27 102652.png" alt="屏幕截图 2020-12-27 102652" style="zoom:80%;" />
+
 
 
 #### 2.3 SGI STL第一级空间分配器
 
-SGI STL的第一级空间分配器直接使用了malloc、free、realloc这些原始的C函数来实现动态内存的分配、销毁和重分配等操作，也并不是采用了`::operator new`或者`::operator delete`来实现。同时第一级空间分配器并不支持`set_new_handler()`这样的操作，而是定义了一个替代者`set_malloc_handler()`。
+在上面我们已经指出一级空间分配器的实现是由`malloc`、`free`、`realloc`等函数完成，并不是用`::operator new`、`::operator delete`等函数完成，虽然不支持`set_new_handler()`，但引入了一个`set_malloc_handler()`以处理空间分配意外情况。
 
-这个第一级空间分配器大约在源代码文件`std_alloc.h`的109行。
+这个第一级空间分配器大约在源代码文件[stl_lloc.h](stl_alloc.h)的109行。
 
 ```c++
 template <int __inst>
@@ -213,11 +176,11 @@ typedef __malloc_alloc_template<0> malloc_alloc;
 
 #### 2.4 SGI STL第二级空间分配器
 
+<img src="../../image/屏幕截图 2020-12-27 103126.png" alt="屏幕截图 2020-12-27 103126" style="zoom:80%;" />
 
+在上面我们也提到过，二级空间分配器针对索要不同空间采取了不同的策略，对于大于128字节的空间直接调用`__malloc_alloc_template`来完成；而对于小于128字节空间的索取使用了内存池来实现。这里内存池的本质就是一个使用指针串起来的内存块链表，每一个链表节点既是一个完整的空间也是指针（通过union来实现），空间大小为8的倍数（8、16、24...120、128），即使用户需要的不是8的倍数也会上取整，然后分配器会为每一个不同大小的内存池链表维护一个链表指针数组，分别指向不同链表的起点。
 
-如下几个关键的定义和成员函数最为重要：
-
-
+当用户需要时二级空间分配器会从其中取出一个节点删除，将这节点的空间作为自己的所需返回；当不需要时，将这个空间（重解释成链表节点）插回到内存池链表的头部。如果内存池空间不足，二级分配器还会通过`malloc`分配出更多的空间（这个空间为$2\times所需单元空间（被上取整过）$余，这一点也是有深意的）添加到链表中。
 
 ```c++
 #if defined(__SUNPRO_CC) || defined(__GNUC__)
@@ -518,8 +481,6 @@ public:
       { _Alloc::deallocate(__p, sizeof (_Tp)); }
 };
 ```
-
-
 
 
 
