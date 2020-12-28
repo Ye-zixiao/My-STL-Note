@@ -2,13 +2,17 @@
 
 #### 2.1 SGI STL空间分配器概览
 
+##### 2.1.1 分配器纵览
+
 在SGI STL的实现中主要有如下几个空间分配器：
 
-1. 标准C++空间分配器`std::allocator`，实现在[defalloc.h](defalloc.h)
-2. SGI第一级空间分配器`__malloc_alloc_template`，实现在[stl_alloc.h](stl_alloc.h)
-3. SGI第二级空间分配器__default_alloc_template`，实现在[stl_alloc.h](stl_alloc.h)
-4. SGI一/二级空间分配器的别名`alloc`以及简单封装类`simple_alloc`，实现在[stl_alloc.h](stl_alloc.h)
-5. 由`alloc`实现的C++标准空间分配器`allocator`，实现在[stl_alloc.h](stl_alloc.h)，前提是需要使用到
+|                          分配器名称                          |                实现文件                |
+| :----------------------------------------------------------: | :------------------------------------: |
+|              标准C++空间分配器`std::allocator`               |  [defalloc.h](1.Allocator\defalloc.h)  |
+|         SGI第一级空间分配器`__malloc_alloc_template`         | [stl_alloc.h](1.Allocator\stl_alloc.h) |
+|        SGI第二级空间分配器`__default_alloc_template`         | [stl_alloc.h](1.Allocator\stl_alloc.h) |
+| SGI一/二级空间分配器的别名`alloc`以及简单封装类`simple_alloc` | [stl_alloc.h](1.Allocator\stl_alloc.h) |
+| 由`alloc`实现的C++标准空间分配器`allocator`（前提是用户指定） | [stl_alloc.h](1.Allocator\stl_alloc.h) |
 
 其中标准C++空间分配器`std::allocator`并不是默认的空间分配器，`alloc`才是真正默认空间分配器，然而`alloc`只不过是SGI第二级空间分配器`__default_alloc_template`的别名。在容器空间的分配中，则会使用到简单封装类模板`simple_alloc`，它又仅仅是`alloc`的简单封装，因此空间分配的真正操作者是`__default_alloc_template`这个分配器而不是其他，除非特别用户指定。
 
@@ -20,7 +24,9 @@ SGI STL对空间分配器的实现主要是出于性能、效率和其他多种�
 
 
 
-为了实现紧密分工，STL allocator还将对象的空间分配/销毁以及对象的构造/析构两种操作分离开来实现。这使得`alloc`只负责对象空间的分配/销毁：`alloc::allocate()`、`alloc::deallocate()`，而对象构造和析构由进一步封装的类，比如上述由`alloc`实现的标准空间分配器`allocator`实现或者由STL算法`std::construct()`、`std::destroy()`来完成。
+##### 2.1.2 空间分配/销毁与对象构造/析构分离
+
+为了实现紧密分工，*STL allocator还将对象的空间分配/销毁以及对象的构造/析构两种操作分离开来实现*。这使得`alloc`只负责对象空间的分配/销毁：`alloc::allocate()`、`alloc::deallocate()`，而对象构造和析构由进一步封装的类，比如上述由`alloc`实现的标准空间分配器`allocator`实现或者由STL算法`std::construct()`、`std::destroy()`来完成。
 
 其中`alloc`、一/二级空间分配器实现在[stl_alloc.h](stl_alloc.h)，STL算法`std::construct()`、`std::destroy()`实现在[stl_construct.h](stl_construct.h)，除此之外，STL还具有一些在已分配但未初始化的空间上进行拷贝构造、填充的算法`unintialized_xxx()`，它们实现在[stl_uninitialized.h](stl_uninitialized.h)，然后这些源文件全部include在标准C++头文件[memory](memory)中。文件分布如下：
 
@@ -28,7 +34,7 @@ SGI STL对空间分配器的实现主要是出于性能、效率和其他多种�
 
 
 
-#### 2.2 空间分配/销毁和对象构造/析构
+#### 2.2 对象的构造/析构算法
 
 在[stl_construct.h](stl_construct.h)中我们可以看到STL算法`construct()`就是直接通过定位new的方式实现，而`destroy()`通过`__type_traits`技术，识别出调用元素/迭代器指定范围内的元素的类型，判断出它们是否是POD类型（析构、构造函数trivial可有可无，没什么用），若是则什么也不做，否则逐个调用析构函数。
 
@@ -85,102 +91,24 @@ inline void _Destroy(_ForwardIterator __first, _ForwardIterator __last) {
 
 这个第一级空间分配器大约在源代码文件[stl_lloc.h](stl_alloc.h)的109行。
 
-```c++
-template <int __inst>
-class __malloc_alloc_template {
-
-private:
-  //以下函数指针用于处理内存不足的情况（oom==out of memory）
-  static void* _S_oom_malloc(size_t);
-  static void* _S_oom_realloc(void*, size_t);
-
-#ifndef __STL_STATIC_TEMPLATE_MEMBER_BUG
-  static void (* __malloc_alloc_oom_handler)();
-#endif
-
-public:
-
-  static void* allocate(size_t __n)
-  {
-    void* __result = malloc(__n);
-    if (0 == __result) __result = _S_oom_malloc(__n);
-    return __result;
-  }
-
-  static void deallocate(void* __p, size_t /* __n */)
-  {
-    free(__p);
-  }
-
-  static void* reallocate(void* __p, size_t /* old_sz */, size_t __new_sz)
-  {
-    void* __result = realloc(__p, __new_sz);
-    if (0 == __result) __result = _S_oom_realloc(__p, __new_sz);
-    return __result;
-  }
-
-  //类似于set_new_handler()
-  static void (* __set_malloc_handler(void (*__f)()))()
-  {
-    void (* __old)() = __malloc_alloc_oom_handler;
-    __malloc_alloc_oom_handler = __f;
-    return(__old);
-  }
-
-};
-
-// malloc_alloc out-of-memory handling
-
-#ifndef __STL_STATIC_TEMPLATE_MEMBER_BUG
-template <int __inst>
-void (* __malloc_alloc_template<__inst>::__malloc_alloc_oom_handler)() = 0;
-#endif
-
-template <int __inst>
-void*
-__malloc_alloc_template<__inst>::_S_oom_malloc(size_t __n)
-{
-    void (* __my_malloc_handler)();
-    void* __result;
-
-    for (;;) {
-        __my_malloc_handler = __malloc_alloc_oom_handler;
-        //一般而言，malloc分配失败时的处理函数是终止进程
-        if (0 == __my_malloc_handler) { __THROW_BAD_ALLOC; }
-        //但若用户确实指定了一个可行的处理函数，则尝试重新分配动态内存
-        (*__my_malloc_handler)();
-        __result = malloc(__n);
-        if (__result) return(__result);
-    }
-}
-
-template <int __inst>
-void* __malloc_alloc_template<__inst>::_S_oom_realloc(void* __p, size_t __n)
-{
-    void (* __my_malloc_handler)();
-    void* __result;
-
-    for (;;) {
-        __my_malloc_handler = __malloc_alloc_oom_handler;
-        if (0 == __my_malloc_handler) { __THROW_BAD_ALLOC; }
-        (*__my_malloc_handler)();
-        __result = realloc(__p, __n);
-        if (__result) return(__result);
-    }
-}
-
-typedef __malloc_alloc_template<0> malloc_alloc;
-```
 
 
-
-#### 2.4 SGI STL第二级空间分配器
+#### 2.4 ==SGI STL第二级空间分配器==
 
 <img src="../../image/屏幕截图 2020-12-27 103126.png" alt="屏幕截图 2020-12-27 103126" style="zoom:80%;" />
 
-在上面我们也提到过，二级空间分配器针对索要不同空间采取了不同的策略，对于大于128字节的空间直接调用`__malloc_alloc_template`来完成；而对于小于128字节空间的索取使用了内存池来实现。这里内存池的本质就是一个使用指针串起来的内存块链表，每一个链表节点既是一个完整的空间也是指针（通过union来实现），空间大小为8的倍数（8、16、24...120、128），即使用户需要的不是8的倍数也会上取整，然后分配器会为每一个不同大小的内存池链表维护一个链表指针数组，分别指向不同链表的起点。
+上面提到，二级空间分配器针对索要不同空间采取了不同的策略，对于大于128字节的空间分配直接调用`__malloc_alloc_template`来完成；而对于小于128字节空间的索取使用了内存池来实现。这里内存池的本质就是一个使用指针串起来的内存块链表free-list，每一个链表节点既是一个完整的空间也是指针（即下面通过union定义出的嵌套类`_Obj`），每一个节点空间大小为8的倍数（8、16、24...120、128），即使用户需要的不是8的倍数也会上取整，然后分配器会为每一个不同大小的内存池链表维护一个链表指针数组，分别指向不同链表的起点。
 
 当用户需要时二级空间分配器会从其中取出一个节点删除，将这节点的空间作为自己的所需返回；当不需要时，将这个空间（重解释成链表节点）插回到内存池链表的头部。如果内存池空间不足，二级分配器还会通过`malloc`分配出更多的空间（这个空间为$2\times所需单元空间（被上取整过）$余，这一点也是有深意的）添加到链表中。
+
+对于这部分的实现我们需要关注如下几个静态成员函数的实现：
+
+|       成员函数名       |                       静态成员函数作用                       |
+| :--------------------: | :----------------------------------------------------------: |
+|    **`allocate()`**    | 负责分配空间，要么从`__malloc_alloc_template`哪里分配大空间，要么从free-list中取出小空间 |
+|   **`deallocate()`**   |                负责销毁空间，策略与上正好相反                |
+|   **`_S_refill()`**    | 负责分配内存池空间，并从内存池空间取出部分空间给`_S_refill()`用来重新组建free-list |
+| **`_S_chunk_alloc()`** |  负责当free-list链表空时从内存池中取出一些空间组建新的串链   |
 
 ```c++
 #if defined(__SUNPRO_CC) || defined(__GNUC__)
@@ -202,13 +130,14 @@ __PRIVATE:
   //定义free-list空闲动态内存链表节点
   union _Obj {
         union _Obj* _M_free_list_link;
-        char _M_client_data[1];    /* The client sees this.        */
+        char _M_client_data[1];
   };
 private:
 # if defined(__SUNPRO_CC) || defined(__GNUC__) || defined(__HP_aCC)
     static _Obj* __STL_VOLATILE _S_free_list[]; 
         // Specifying a size results in duplicate def for 4.1
 # else
+    //free-list链表首结点指针数组
     static _Obj* __STL_VOLATILE _S_free_list[_NFREELISTS]; 
 # endif
   //根据所需内存大小，决定使用上述free-list数组中的哪一个元素（链表）
@@ -216,13 +145,12 @@ private:
         return (((__bytes) + (size_t)_ALIGN-1)/(size_t)_ALIGN - 1);
   }
 
-  // Returns an object of size __n, and optionally adds to size __n free list.
+  //内存池重新填充
   static void* _S_refill(size_t __n);
-  // Allocates a chunk for nobjs of size size.  nobjs may be reduced
-  // if it is inconvenient to allocate the requested number.
+  //内存池实现的核心成员函数
   static char* _S_chunk_alloc(size_t __size, int& __nobjs);
 
-  // Chunk allocation state.
+  //定义内存池起始地址、结束地址、大小
   static char* _S_start_free;
   static char* _S_end_free;
   static size_t _S_heap_size;
@@ -462,9 +390,60 @@ __default_alloc_template<__threads, __inst> ::_S_free_list[
 
 
 
-#### 2.5 SGI STL一/二级分配器的封装类
+上面实现代码中有几个
 
-这段代码大致在源代码文件`std_alloc.h`的193行
+##### 2.4.1 内存分配allocate
+
+`__default_alloc_template`对内存的分配很简单，即大于128字节的空间调用`__malloc_alloc_template`来完成，小的空间则从指定大小的链表指针，然后从该内存池链表中取出一个首结点，作为新的空间。该成员函数声明如下：
+
+```c++
+static void* allocate(size_t __n);
+```
+
+<img src="../../image/屏幕截图 2020-12-28 094532.png" alt="屏幕截图 2020-12-28 094532" style="zoom:80%;" />
+
+##### 2.4.2 free-list链表重填充refill
+
+当上述`allocate()`成员函数执行的过程中发现指定链表free-list中没有剩余的空间了，那么它就会调用下面的refill函数，其中它会调用`chunk_alloc()`成员函数从内存池中取出空间组成新的free-list串链加入到指定的free-list链表中。该成员函数声明如下：
+
+```c++
+template <bool __threads, int __inst>
+void*
+__default_alloc_template<__threads, __inst>::_S_refill(size_t __n);
+```
+
+
+
+##### 2.4.3 内存池分配chunk_alloc
+
+`chunk_alloc()`函数的作用就是在alloc类需要用到内存池的时候从内存池中取出一部分空间给调用函数，而调用者函数会将这部分取去的空间逐渐free-list。当内存池空间不足时，它会主动调用`malloc`分配出更多的空间，有意思的地方在于它会将这个新分配空间的一部分构建成free-list，而连续分布在该部分后面的空间作为内存池存储起来，以备后续的需求。其声明如下：
+
+```c++
+template <bool __threads, int __inst>
+char*
+__default_alloc_template<__threads, __inst>::_S_chunk_alloc(size_t __size, 
+                                                            int& __nobjs)
+```
+
+<img src="../../image/屏幕截图 2020-12-28 100321.png" alt="屏幕截图 2020-12-28 100321" style="zoom:80%;" />
+
+
+
+##### 2.4.4 内存销毁deallocate
+
+与内存分配时`allocate()`成员函数的策略正好相反，`deallocate()`函数对于大于128字节空间的销毁会调用`__malloc_alloc_template`的相关成员来销毁之；但若这部分空间的大小小于128字节，则会将其重新插入到相应free-list首部。其声明如下：
+
+```c++
+static void deallocate(void* __p, size_t __n);
+```
+
+<img src="../../image/屏幕截图 2020-12-28 100722.png" alt="屏幕截图 2020-12-28 100722" style="zoom:80%;" />
+
+
+
+#### 2.5 SGI STL分配器简单封装类
+
+这段代码大致在源代码文件`std_alloc.h`的193行，它只不过是其他分配器的简单封装，默认情况下，容器使用它来封装`alloc`。
 
 ```c++
 template<class _Tp, class _Alloc>
@@ -482,57 +461,22 @@ public:
 };
 ```
 
+`vector`等容器实现代码中就有如下部分，而宏`__STL_DEFAULT_ALLOCATOR`其实指的就是`alloc`：
+
+```c++
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class vector : protected _Vector_base<_Tp, _Alloc> {};
+
+typedef simple_alloc<_Tp, _Alloc> _M_data_allocator;  
+```
+
 
 
 #### 2.6 未初始化内存拷贝/填充算法
 
 未初始化内容拷贝函数`uninitialzed_copy()`和未初始化内存填充函数`uninitalized_fill()`和`uninitalized_fill_n()`函数实现的方法类似于上述对象析构函数`destroy()`的实现原理。
 
-它们通过`__type_traits`技术来区分待初始化内存上欲构造的类型是POD类型还是非POD类型，其中POD类型指的是具有trivial没有屌用的构造、析构、拷贝和赋值函数的原始类型、C-结构化类型，例如int、double之类的。①若是POD类型就直接使用copy()、fill()这样的STL算法直接来完成内存数据的拷贝和填充；②若不是，这对每一个迭代器上指向的元素执行拷贝构造函数。
+它们通过`__type_traits`技术来区分待初始化内存上欲构造的类型是POD类型还是非POD类型，其中POD类型指的是具有trivial没有屌用的构造、析构、拷贝和赋值函数的原始类型、C-结构化类型，例如int、double之类的。①若是POD类型就直接使用copy()、fill()这样的STL算法直接来完成内存数据的拷贝和填充；②若不是，这对每一个迭代器上指向的元素逐个执行拷贝构造函数。
 
-这些代码位于源文件`stl_uninitalized.h`之中。下面仅以`uninitalized_fill()`函数为例：
-
-```c++
-/* 针对具有trivial无用构造、拷贝等函数的POD类型直接
-	调用STL的fill()函数直接进行内存数据的拷贝 */
-template <class _ForwardIter, class _Tp>
-inline void
-__uninitialized_fill_aux(_ForwardIter __first, _ForwardIter __last, 
-                         const _Tp& __x, __true_type)
-{
-  fill(__first, __last, __x);
-}
-
-//针对非POD类型逐个调用拷贝构造函数
-template <class _ForwardIter, class _Tp>
-void
-__uninitialized_fill_aux(_ForwardIter __first, _ForwardIter __last, 
-                         const _Tp& __x, __false_type)
-{
-  _ForwardIter __cur = __first;
-  __STL_TRY {
-    for ( ; __cur != __last; ++__cur)
-      _Construct(&*__cur, __x);
-  }
-  __STL_UNWIND(_Destroy(__first, __cur));
-}
-
-//使用__type_traits技术分情况调用__uninitalized_fill_aux()函数
-template <class _ForwardIter, class _Tp, class _Tp1>
-inline void __uninitialized_fill(_ForwardIter __first, 
-                                 _ForwardIter __last, const _Tp& __x, _Tp1*)
-{
-  typedef typename __type_traits<_Tp1>::is_POD_type _Is_POD;
-  __uninitialized_fill_aux(__first, __last, __x, _Is_POD());
-                   
-}
-
-template <class _ForwardIter, class _Tp>
-inline void uninitialized_fill(_ForwardIter __first,
-                               _ForwardIter __last, 
-                               const _Tp& __x)
-{
-  __uninitialized_fill(__first, __last, __x, __VALUE_TYPE(__first));
-}
-```
+这些代码位于源文件[stl_uninitalized.h](stl_uninitalized.h)之中。
 
