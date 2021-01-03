@@ -829,7 +829,6 @@ vector<_Tp, _Alloc>::insert(iterator __position,
   if (__first != __last) {
     size_type __n = 0;
     distance(__first, __last, __n);
-    //若备用空间足够
     if (size_type(_M_end_of_storage - _M_finish) >= __n) {
       const size_type __elems_after = _M_finish - __position;
       iterator __old_finish = _M_finish;
@@ -847,7 +846,6 @@ vector<_Tp, _Alloc>::insert(iterator __position,
         copy(__first, __first + __elems_after, __position);
       }
     }
-    //若备用空间不足，则动态增长空间
     else {
       const size_type __old_size = size();
       const size_type __len = __old_size + max(__old_size, __n);

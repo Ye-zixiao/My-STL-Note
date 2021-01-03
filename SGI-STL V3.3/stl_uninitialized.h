@@ -71,6 +71,8 @@ __uninitialized_copy(_InputIter __first, _InputIter __last,
   return __uninitialized_copy_aux(__first, __last, __result, _Is_POD());
 }
 
+
+//未初始化内存拷贝算法
 template <class _InputIter, class _ForwardIter>
 inline _ForwardIter
   uninitialized_copy(_InputIter __first, _InputIter __last,
@@ -130,6 +132,7 @@ __uninitialized_copy_n(_InputIter __first, _Size __count,
                                 __ITERATOR_CATEGORY(__first));
 }
 
+//未初始化内存拷贝n算法
 template <class _InputIter, class _Size, class _ForwardIter>
 inline pair<_InputIter, _ForwardIter>
 uninitialized_copy_n(_InputIter __first, _Size __count,
@@ -170,6 +173,8 @@ inline void __uninitialized_fill(_ForwardIter __first,
                    
 }
 
+
+//未初始化内存填充算法
 template <class _ForwardIter, class _Tp>
 inline void uninitialized_fill(_ForwardIter __first,
                                _ForwardIter __last, 
@@ -210,6 +215,7 @@ __uninitialized_fill_n(_ForwardIter __first, _Size __n, const _Tp& __x, _Tp1*)
   return __uninitialized_fill_n_aux(__first, __n, __x, _Is_POD());
 }
 
+//未初始化内存填充n算法
 template <class _ForwardIter, class _Size, class _Tp>
 inline _ForwardIter 
 uninitialized_fill_n(_ForwardIter __first, _Size __n, const _Tp& __x)

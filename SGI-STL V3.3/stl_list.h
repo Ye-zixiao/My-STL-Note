@@ -54,6 +54,11 @@ struct _List_iterator_base {
   typedef size_t                     size_type;
   typedef ptrdiff_t                  difference_type;
   typedef bidirectional_iterator_tag iterator_category;
+  /* 这里的stl_list.h头文件虽然没有包含定义bidirectional_iterator_tag的头文件
+    却能够使用bidirectional_iterator_tag的原因在于：
+      若一个头文件header1.h定义了x，而另一个头文件header2.h使用了x，只要header2.h
+    使用x的函数或者类与x同属一个命名空间，则在某一个头文件中header1.h#include在
+    header2.h之前，那么这种看似没有关联的使用是合法的！🙃 */
 
   _List_node_base* _M_node;
 
@@ -86,6 +91,8 @@ struct _List_iterator : public _List_iterator_base {
   _List_iterator() {}
   _List_iterator(const iterator& __x) : _List_iterator_base(__x._M_node) {}
 
+  /* 解引用重载基于的指针的重解释来实现，阅读现如今g++中STL的源码你还是会发现
+    当前STL的实现还是使用这一种方法，只不过用上了static_cast */
   reference operator*() const { return ((_Node*) _M_node)->_M_data; }
 
 #ifndef __SGI_STL_NO_ARROW_OPERATOR
@@ -277,7 +284,7 @@ public:
   typedef const value_type& const_reference;
   typedef _List_node<_Tp> _Node;
   typedef size_t size_type;
-  typedef ptrdiff_t difference_type;
+  typedef ptrdiff_t difference_type;create_node
 
   typedef typename _Base::allocator_type allocator_type;
   allocator_type get_allocator() const { return _Base::get_allocator(); }

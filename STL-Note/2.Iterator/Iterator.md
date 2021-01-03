@@ -85,7 +85,18 @@ typename Vector<T>::Iterator Vector<T>::end() {
 }
 ```
 
-文件[test.cpp](test.cpp)大致按照上面的想法实现了一个简单的Vector及其迭代器VectorIterator。
+文件[main.cpp](main.cpp)大致按照上面的想法实现了一个简单的Vector及其迭代器VectorIterator。
+
+
+
+下面的表格展示了一些与迭代器有关的源文件及其作用：
+
+|                    源文件                     |                             作用                             |
+| :-------------------------------------------: | :----------------------------------------------------------: |
+|       [stl_iterator.h](stl_iterator.h)        |                    主要实现了迭代器适配器                    |
+|  [stl_iterator_base.h](stl_iterator_base.h)   | 主要实现了迭代器特性类iterator_traits、迭代器类型标签类以及两个迭代器算法 |
+|        [type_traits.h](type_traits.h)         |                     主要实现了类型特性类                     |
+| [iterator](iterator)/[iterator.h](iterator.h) |                对上述的头文件进行include包装                 |
 
 
 
@@ -97,7 +108,7 @@ typename Vector<T>::Iterator Vector<T>::end() {
 
 在书本的最开始我们就指出过，迭代器是连接容器和算法的桥梁，算法通过迭代器来实现对容器的操作，这种操作可以是易变性的，也可以仅仅是对容器中元素的游历。所有算法的正常执行都必须基于相应的容器支持这种操作的前提之下才能得到保证，而且算法也必须有能力知道有关容器的相关信息，例如最常见的就是容器中元素的类型信息，如果一个累加算法不知道容器中元素的类型，那么显然这个算法无法正常执行。
 
-但是由于算法只能接触到迭代器，而不能直接接触到容器，这就使得算法无法直接获知到有关容器的任何信息，因此在STL中迭代器这个沟通容器和算法的中间桥梁必须能够向算法提供一些信息的能力。一般这种信息都是借由迭代器本身的属性信息来提供，我们将这些属性信息称为**迭代器的关联类型信息（associated types，书中称为相应类别）**。例如算法需要知道容器元素的类型信息，那它就是在询问迭代器所指向的元素类型是什么。
+但是由于算法只能接触到迭代器，而不能直接接触到容器，这就使得算法无法直接获知到有关容器的任何信息，因此**在STL中迭代器这个沟通容器和算法的中间桥梁必须能够向算法提供一些信息的能力。一般这种信息都是借由迭代器本身的属性信息来提供，我们将这些属性信息称为迭代器的关联类型信息（associated types，书中称为相应类别）**。例如算法需要知道容器元素的类型信息，那它就是在询问迭代器所指向的元素类型是什么。
 
 因此为了使得迭代器提供这些相应类别的信息，每一个容器的迭代器都会提供如下5个类型成员：
 
@@ -139,7 +150,7 @@ T accumulate(T *beg, T *end) {
 }
 ```
 
-但这种方法必然会带来另外一个虽然简单解决但又显得比较烦人的问题：我们必须为每一个算法提供一个部分特例化的版本以支持原始指针（包括上面没有讲到的const T*）！因此我们必须提出一种新的解决方法，来提取出迭代器中的相应类别信息，则便是迭代器类型特性类iterator_traits。
+但这种方法必然会带来另外一个虽然简单解决但又显得比较烦人的问题：我们必须为每一个算法提供一个部分特例化的版本以支持原始指针（包括上面没有讲到的const T*）🙃！因此我们必须提出一种新的解决方法，来提取出迭代器中的相应类别信息，则便是迭代器类型特性类iterator_traits。
 
 
 
@@ -191,19 +202,53 @@ struct iterator_traits<const _Tp*> {
 ```c++
 template<typename Iterator>
 typename Iterator_traits<Iterator>::value_type
-accumulate(Iterator beg,Iterator end){
+accumulate(Iterator beg, Iterator end) {
 	typename Iterator_traits<Iterator>::value_type res(0);
-	for(;beg!=end;++beg)
-		res+=*beg;
+	for (; beg != end; ++beg)
+		res += *beg;
 	return res;
 }
 ```
 
 
 
-#### 3.2.3 迭代器分类iterator_category
+### 3.3 ==迭代器分类iterator_category==
+
+#### 3.3.1 迭代器分类
+
+正如我们在上面的所述，为了能够让迭代器特性类iterator_traits从传入的迭代器中提取出迭代器相应类别的信息，每一个容器相关的迭代器都应该在内部定义出上述的5个成员类型：value_type、difference_type、pointer、reference和iterator_category。它们代表的意义非常容易理解，其内部的实现仅仅就是在迭代器内部用一个typedef或者using定义出一个类型成员即可：
+
+```c++
+template<typename T>
+class VectorIterator : public Iterator<T> {
+public:
+	typedef T value_type;
+
+    /*  ....  */
+};
+```
+
+其中迭代器分类iterator_category是迭代器相关类别信息中最为重要的成员类型。对于迭代器而言，它有如下5种分类：
+
+1. **输入迭代器Input Iterator**：该迭代器所指向的容器元素只读
+2. **输出迭代器Output Iterator**：该迭代器所指向的容器元素只写
+3. **前向迭代器Forward Iterator**：该迭代器仅支持向前步进，且每次步进步伐仅能一步。即只支持iter++或者++iter操作，不支持--iter、iter--甚至iter+=n、iter-=n操作
+4. **双向迭代器Bidirectional Iterator**：迭代器可以向前向后步进，但每次步进步伐仍然只能一步
+5. **随机访问迭代器Random Access Iterator**：该迭代器步进支持向前向后步进，还支持任意步的步进
+
+它们从上到下存在这一种扩展强化能力的关系，我们可以用如下图展示这种关系，虽然书中指出这并不是一种继承关系但从代码的角度它们确实利用了继承：
+
+<img src="../../image/屏幕截图 2021-01-02 101430.png" alt="屏幕截图 2021-01-02 101430" style="zoom:80%;" />
+
+迭代器之所以要将迭代器分的如此细致并定义出一个itertor_category成员，其中一个很大的原因正是由迭代器它本身是连接容器和算法的桥梁造成。**由于容器的一些特性导致迭代器只能支持某些操作，却不能支持更多的操作**（例如链表迭代器不支持iter+=n）**，因此直接接触迭代器的算法必须要知道这些信息，对不同的迭代器采取不同的实现，从而达到算法原本的目的**。迭代器步进算法`advance()`就是一个很好的例子，对于随机访问迭代器它可以用`iter+=n`来实现，但对输入、前向、双向迭代器就仅能通过`iter++`来完成。任何一个迭代器都应该让算法执行符合于自己的操作，这样才能达到最高效的性能，这样我们就更应该让算法知道传入迭代器的类型。
 
 
+
+#### 3.3.2 迭代器类别标签类
+
+为了能够让算法分辨出出入迭代器的属性进而采用不同的实现，一种最简单的方法就是在算法内部使用`if-elese`的方法在执行期动态裁决。但是这种方法依赖于执行期裁决，非常影响程序效率，因此STL采用了静态多态——重载函数解析机制来让算法在编译的时候就能针对不同的迭代器调用不同的具体实现函数。
+
+为了实现这一目的，①SGI STL会在[stl_iterator_base.h](stl_iterator_base.h)文件中定义如下5个迭代器类别标签类：
 
 ```c++
 struct input_iterator_tag {};
@@ -211,18 +256,50 @@ struct output_iterator_tag {};
 struct forward_iterator_tag : public input_iterator_tag {};
 struct bidirectional_iterator_tag : public forward_iterator_tag {};
 struct random_access_iterator_tag : public bidirectional_iterator_tag {};
+```
 
-template <class _Category, class _Tp, class _Distance = ptrdiff_t,
-          class _Pointer = _Tp*, class _Reference = _Tp&>
-struct iterator {
-  typedef _Category  iterator_category;
-  typedef _Tp        value_type;
-  typedef _Distance  difference_type;
-  typedef _Pointer   pointer;
-  typedef _Reference reference;
+②然后每一个迭代器都必须根据所关联容器的特性，选择上述的一个标签类使用typedef或者using定义成员类型iterator_category。
+
+```c++
+template<typename T>
+class VectorIterator : public Iterator<T> {
+public:
+	/*  ...  */
+	typedef random_access_iterator_tag  iterator_category;
+	/*  ...  */
 };
+```
+
+③这样算法就可以利用迭代器特性类iterator_traits提取出迭代器的分类标签类信息，并以这个获知的分类标签类创建出临时对象传入到算法具体的实现函数之中，这样编译器就可以根据这个表示迭代器不同类别的辅助参数通过重载函数解析机制解析出最佳匹配函数，从而避免了执行期动态解析的过程。
+
+```c++
+//针对输入、前向、双向迭代器的advance算法具体实现
+template<typename InputIterator, typename Dist>
+void advance(InputIterator &iter, Dist n, input_iterator_tag) {
+	while (n--) iter++;
+}
+
+//针对随机访问迭代器的advance算法具体实现
+template<typename RandomAccessIterator, typename Dist>
+void advance(RandomAccessIterator &iter, Dist n, random_access_iterator_tag) {
+	iter += n;
+}
+
+template<typename Iterator, typename Dist>
+void advance(Iterator &iter, Dist n) {
+	using iter_category = typename Iterator_traits<Iterator>::iterator_category;
+    /* 创建临时标签类对象，然后依赖函数解析机制判断出应该调用哪一算法实现函数 */
+	advance(iter, n, iter_category());
+}
+```
+
+> 为了展示实现的方式，这里尽可能不展露太多的细节，因此advance这里也仅仅支持向前步进，也不对双向迭代器这种情况做处理。
 
 
+
+在实际的SGI STL源代码中临时对象的创建并不是按照我上面所写的那样，因为这种方式需要对每一个算法都再做typedef或者using。重复的东西应该从中剥离处理，独立成函数模块，以避免冗余。所以SGI STL源代码中编写了一些像`iterator_category()`这样的函数来负责创建临时标签类对象，这些源代码大致在源文件[stl_iterator_base.h](stl_iterator_base.h)的141行：
+
+```c++
 template <class _Iter>
 inline typename iterator_traits<_Iter>::iterator_category
 __iterator_category(const _Iter&)
@@ -230,7 +307,6 @@ __iterator_category(const _Iter&)
   typedef typename iterator_traits<_Iter>::iterator_category _Category;
   return _Category();
 }
-
 
 template <class _Iter>
 inline typename iterator_traits<_Iter>::difference_type*
@@ -254,9 +330,160 @@ iterator_category(const _Iter& __i) { return __iterator_category(__i); }
 template <class _Iter>
 inline typename iterator_traits<_Iter>::difference_type*
 distance_type(const _Iter& __i) { return __distance_type(__i); }
+
+template <class _Iter>
+inline typename iterator_traits<_Iter>::value_type*
+value_type(const _Iter& __i) { return __value_type(__i); }
+
+#define __ITERATOR_CATEGORY(__i) __iterator_category(__i)
+#define __DISTANCE_TYPE(__i)     __distance_type(__i)
+#define __VALUE_TYPE(__i)        __value_type(__i)
 ```
 
+在这个文件文件中还附带实现了我们上述所述的`advance()`步进算法和`distance()`迭代器距离算法。
 
 
-### 3.3 类型特性类__type_traits
+
+### 3.4 迭代器基类iterator
+
+为了抽取出所有迭代器中的一些共有重复成员类型，SGI STL定义了一个名为iterator的基类。注意该迭代器基类的作用并不是像《*Design Pattern*》那样做多态来使用，它唯一的作用仅仅就只有继承，方便抽离出所有迭代器共有的属性罢了。该类模板的定义大致在源代码文件[stl_iterator_base.h](stl_iterator_base.h)的94行
+
+```c++
+template <class _Category, class _Tp, class _Distance = ptrdiff_t,
+          class _Pointer = _Tp*, class _Reference = _Tp&>
+struct iterator {
+  typedef _Category  iterator_category;
+  typedef _Tp        value_type;
+  typedef _Distance  difference_type;
+  typedef _Pointer   pointer;
+  typedef _Reference reference;
+};
+```
+
+每一个容器相关的迭代器实现都会继承这个迭代器基类，方便继承所有迭代器共有的属性，或者用来避免定义重复的成员类型，类似于如下。但如果这个容器的迭代器就是原始指针，那并不会这样。
+
+```c++
+//实际中vector的迭代器采用的是原始指针，而不是封装
+template<typename T>
+class VectorIterator : public Iterator<random_access_iterator_tag, T> {
+public:
+    /*  ...  */
+}
+```
+
+不过通过观察SGI STLv3.3版本你会发现，现有容器的迭代器实现似乎放弃了这种选择，即其中的成员类型都是每一个具体container_iterator自己实现。当然这并没有什么太大的影响。
+
+
+
+下面的图重新整理了上述迭代器实现过程中类与类之间的关系：
+
+<img src="../../image/iterator关系.jpg" alt="iterator关系" style="zoom:50%;" />
+
+
+
+### 3.5 类型特性类__type_traits
+
+如同iterator_traits迭代器特性类可以提取出迭代器相关的类别信息那样，SGI STL中也存在着一个可以用来提取出任何数据类型相关信息的类型特性类，它的实现技术与iterator_traits相同。算法可以根据这个__type_traits类型特性类提取出待操作元素的类型有哪些特性：它是否具有non-trivial（有意义，反之就是无意义可有可无）的构造函数？是否具有non-trivial的拷贝构造函数？等等。
+
+它的好处在于算法可以根据__type_traits判断出待操作元素的类型特性信息，对作用元素执行最高效的操作。例如`copy()`算法一旦知道自己待操作的某指定范围的元素具有trivial（没屌用的）拷贝构造函数，那么它就可以通过`memcpy()`来实现内存元素的直接拷贝，而不需要对指定范围中的每一个元素调用拷贝构造函数，因为这样效率太低，且这个拷贝构造函数执行了和不执行没有任何区别！
+
+为了表示类型中某一个特性的存在与否，SGI STL会首先定义出两个用来表示真和假的空类型，然后默认为所有的类类型定义一个__type_traits类模板，假设它们的构造、拷贝构造、拷贝赋值、析构函数都是有意义的，并再假设它们都是非POD类型（Plain Old Data，标量类型，即传统的C语言中存在的类型，它们的构造、拷贝构造、析构、拷贝复制都是trivial没屌用的，事实上也并不存在）。
+
+```c++
+struct __true_type { };
+
+struct __false_type { };
+
+template <class _Tp>
+struct __type_traits { 
+   typedef __true_type     this_dummy_member_must_be_first;
+                   /* Do not remove this member. It informs a compiler which
+                      automatically specializes __type_traits that this
+                      __type_traits template is special. It just makes sure that
+                      things work if an implementation is using a template
+                      called __type_traits for something unrelated. */
+
+   /* The following restrictions should be observed for the sake of
+      compilers which automatically produce type specific specializations 
+      of this class:
+          - You may reorder the members below if you wish
+          - You may remove any of the members below if you wish
+          - You must not rename members without making the corresponding
+            name change in the compiler
+          - Members you add will be treated like regular members unless
+            you add the appropriate support in the compiler. */
+ 
+
+   typedef __false_type    has_trivial_default_constructor;
+   typedef __false_type    has_trivial_copy_constructor;
+   typedef __false_type    has_trivial_assignment_operator;
+   typedef __false_type    has_trivial_destructor;
+   typedef __false_type    is_POD_type;
+};
+```
+
+并且还会对每一个POD类型进行特例化：
+
+```c++
+#ifndef __STL_NO_BOOL
+
+__STL_TEMPLATE_NULL struct __type_traits<bool> {
+   typedef __true_type    has_trivial_default_constructor;
+   typedef __true_type    has_trivial_copy_constructor;
+   typedef __true_type    has_trivial_assignment_operator;
+   typedef __true_type    has_trivial_destructor;
+   typedef __true_type    is_POD_type;
+};
+
+/* ... */
+
+__STL_TEMPLATE_NULL struct __type_traits<const unsigned char*> {
+   typedef __true_type    has_trivial_default_constructor;
+   typedef __true_type    has_trivial_copy_constructor;
+   typedef __true_type    has_trivial_assignment_operator;
+   typedef __true_type    has_trivial_destructor;
+   typedef __true_type    is_POD_type;
+};
+```
+
+这样一些STL算法就可以借助__type_traits类型特性类很容易地提取出待操作元素的特性信息，然后与iterator_traits类型产生一个临时对象传入到具体的辅助函数中，编译器依据重载函数解析机制选择最佳匹配函数，而这个最佳匹配的辅助实现函数必定以最高效的方式实现对应的操作。例如下面的`unintialized_copy()`算法的实现：
+
+```c++
+//具有trivial-copy构造函数调用这个函数，而内部的copy又间接调用memcpy()
+template <class _InputIter, class _ForwardIter>
+inline _ForwardIter 
+__uninitialized_copy_aux(_InputIter __first, _InputIter __last,
+                         _ForwardIter __result,
+                         __true_type)
+{
+  return copy(__first, __last, __result);
+}
+
+//具有non-trivial拷贝构造函数则对范围内的元素逐个调用拷贝构造函数
+template <class _InputIter, class _ForwardIter>
+_ForwardIter 
+__uninitialized_copy_aux(_InputIter __first, _InputIter __last,
+                         _ForwardIter __result,
+                         __false_type)
+{
+  _ForwardIter __cur = __result;
+  __STL_TRY {
+    for ( ; __first != __last; ++__first, ++__cur)
+      _Construct(&*__cur, *__first);
+    return __cur;
+  }
+  __STL_UNWIND(_Destroy(__result, __cur));
+}
+
+
+template <class _InputIter, class _ForwardIter, class _Tp>
+inline _ForwardIter
+__uninitialized_copy(_InputIter __first, _InputIter __last,
+                     _ForwardIter __result, _Tp*)
+{
+  //利用__type_traits提取出元素类型的POD特性，看是否是__true_type还是__false_type
+  typedef typename __type_traits<_Tp>::is_POD_type _Is_POD;
+  return __uninitialized_copy_aux(__first, __last, __result, _Is_POD());
+}
+```
 

@@ -1,8 +1,8 @@
 ## 2. 空间分配器
 
-#### 2.1 SGI STL空间分配器概览
+### 2.1 SGI STL空间分配器概览
 
-##### 2.1.1 分配器纵览
+#### 2.1.1 分配器纵览
 
 在SGI STL的实现中主要有如下几个空间分配器（我们值得关注的）：
 
@@ -24,7 +24,7 @@ SGI STL对空间分配器的实现主要是出于性能、效率和其他多种�
 
 
 
-##### 2.1.2 空间分配/销毁与对象构造/析构分离
+#### 2.1.2 空间分配/销毁与对象构造/析构分离
 
 为了实现紧密分工，*STL allocator还将对象的空间分配/销毁以及对象的构造/析构两种操作分离开来实现*。这使得`alloc`只负责对象空间的分配/销毁：`alloc::allocate()`、`alloc::deallocate()`，而对象构造和析构由进一步封装的类，比如上述由`alloc`实现的标准空间分配器`allocator`实现或者由STL算法`std::construct()`、`std::destroy()`来完成。
 
@@ -34,7 +34,7 @@ SGI STL对空间分配器的实现主要是出于性能、效率和其他多种�
 
 
 
-#### 2.2 对象的构造/析构算法
+### 2.2 对象的构造/析构算法
 
 在[stl_construct.h](stl_construct.h)中我们可以看到STL算法`construct()`就是直接通过定位new的方式实现，而`destroy()`通过`__type_traits`技术，识别出调用元素/迭代器指定范围内的元素的类型，判断出它们是否是POD类型（析构、构造函数trivial可有可无，没什么用），若是则什么也不做，否则逐个调用析构函数。
 
@@ -85,7 +85,7 @@ inline void _Destroy(_ForwardIterator __first, _ForwardIterator __last) {
 
 
 
-#### 2.3 SGI STL第一级空间分配器
+### 2.3 SGI STL第一级空间分配器
 
 在上面我们已经指出一级空间分配器的实现是由`malloc`、`free`、`realloc`等函数完成，并不是用`::operator new`、`::operator delete`等函数完成，虽然不支持`set_new_handler()`，但引入了一个`set_malloc_handler()`以处理空间分配意外情况。
 
@@ -93,7 +93,7 @@ inline void _Destroy(_ForwardIterator __first, _ForwardIterator __last) {
 
 
 
-#### 2.4 ==SGI STL第二级空间分配器==
+### 2.4 ==SGI STL第二级空间分配器==
 
 <img src="../../image/屏幕截图 2020-12-27 103126.png" alt="屏幕截图 2020-12-27 103126" style="zoom:80%;" />
 
@@ -392,7 +392,7 @@ __default_alloc_template<__threads, __inst> ::_S_free_list[
 
 上面实现代码中有几个
 
-##### 2.4.1 内存分配allocate
+#### 2.4.1 内存分配allocate
 
 `__default_alloc_template`对内存的分配很简单，即大于128字节的空间调用`__malloc_alloc_template`来完成，小的空间则从指定大小的链表指针，然后从该内存池链表中取出一个首结点，作为新的空间。该成员函数声明如下：
 
@@ -402,7 +402,7 @@ static void* allocate(size_t __n);
 
 <img src="../../image/屏幕截图 2020-12-28 094532.png" alt="屏幕截图 2020-12-28 094532" style="zoom:80%;" />
 
-##### 2.4.2 free-list链表重填充refill
+#### 2.4.2 free-list链表重填充refill
 
 当上述`allocate()`成员函数执行的过程中发现指定链表free-list中没有剩余的空间了，那么它就会调用下面的refill函数，其中它会调用`chunk_alloc()`成员函数从内存池中取出空间组成新的free-list串链加入到指定的free-list链表中。该成员函数声明如下：
 
@@ -414,7 +414,7 @@ __default_alloc_template<__threads, __inst>::_S_refill(size_t __n);
 
 
 
-##### 2.4.3 内存池分配chunk_alloc
+#### 2.4.3 内存池分配chunk_alloc
 
 `chunk_alloc()`函数的作用就是在alloc类需要用到内存池的时候从内存池中取出一部分空间给调用函数，而调用者函数会将这部分取去的空间逐渐free-list。当内存池空间不足时，它会主动调用`malloc`分配出更多的空间，有意思的地方在于它会将这个新分配空间的一部分构建成free-list，而连续分布在该部分后面的空间作为内存池存储起来，以备后续的需求。其声明如下：
 
@@ -429,7 +429,7 @@ __default_alloc_template<__threads, __inst>::_S_chunk_alloc(size_t __size,
 
 
 
-##### 2.4.4 内存销毁deallocate
+#### 2.4.4 内存销毁deallocate
 
 与内存分配时`allocate()`成员函数的策略正好相反，`deallocate()`函数对于大于128字节空间的销毁会调用`__malloc_alloc_template`的相关成员来销毁之；但若这部分空间的大小小于128字节，则会将其重新插入到相应free-list首部。其声明如下：
 
@@ -441,7 +441,7 @@ static void deallocate(void* __p, size_t __n);
 
 
 
-#### 2.5 SGI STL分配器简单封装类
+### 2.5 SGI STL分配器简单封装类
 
 这段代码大致在源代码文件`std_alloc.h`的193行，它只不过是其他分配器的简单封装，默认情况下，容器使用它来封装`alloc`。
 
@@ -472,7 +472,7 @@ typedef simple_alloc<_Tp, _Alloc> _M_data_allocator;
 
 
 
-#### 2.6 未初始化内存拷贝/填充算法
+### 2.6 未初始化内存拷贝/填充算法
 
 未初始化内容拷贝函数`uninitialzed_copy()`和未初始化内存填充函数`uninitalized_fill()`和`uninitalized_fill_n()`函数实现的方法类似于上述对象析构函数`destroy()`的实现原理。
 
