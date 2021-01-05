@@ -610,18 +610,18 @@ typename Vector<T>::Iterator Vector<T>::end() {
 }
 ```
 
-文件[main.cpp](main.cpp)大致按照上面的想法实现了一个简单的Vector及其迭代器VectorIterator。
+文件[test.cpp](2.Iterator\test.cpp)大致按照上面的想法实现了一个简单的Vector及其迭代器VectorIterator。
 
 
 
 下面的表格展示了一些与迭代器有关的源文件及其作用：
 
-|                    源文件                     |                             作用                             |
-| :-------------------------------------------: | :----------------------------------------------------------: |
-|       [stl_iterator.h](stl_iterator.h)        |                    主要实现了迭代器适配器                    |
-|  [stl_iterator_base.h](stl_iterator_base.h)   | 主要实现了迭代器特性类iterator_traits、迭代器类型标签类以及两个迭代器算法 |
-|        [type_traits.h](type_traits.h)         |                     主要实现了类型特性类                     |
-| [iterator](iterator)/[iterator.h](iterator.h) |                对上述的头文件进行include包装                 |
+|                            源文件                            |                             作用                             |
+| :----------------------------------------------------------: | :----------------------------------------------------------: |
+|         [stl_iterator.h](2.Iterator\stl_iterator.h)          |                    主要实现了迭代器适配器                    |
+|    [stl_iterator_base.h](2.Iterator\stl_iterator_base.h)     | 主要实现了迭代器特性类iterator_traits、迭代器类型标签类以及两个迭代器算法 |
+|          [type_traits.h](2.Iterator\type_traits.h)           |                     主要实现了类型特性类                     |
+| [iterator](2.Iterator\iterator)/[2.Iterator\iterator.h](2.Iterator\iterator.h) |                对上述的头文件进行include包装                 |
 
 
 
@@ -687,7 +687,7 @@ T accumulate(T *beg, T *end) {
 
 至于迭代器特性类iterator_traits的实现更是简单，如我们所见，在改进前提取迭代器相关类别信息的工作（直接从类类型迭代器提取和对原始指针进行部分特例化）是交由算法自己来完成；而在改进后这些工作都是完全由iterator_traits来负责，相应的直接提取和部分特例化工作都变成了iterator_traits的责任。
 
-这部分的代码实现在源文件[stl_iterator_base.h](stl_iterator_base.h)的第108行：
+这部分的代码实现在源文件[stl_iterator_base.h](2.Iterator\stl_iterator_base.h)的第108行：
 
 ```c++
 template <class _Iterator>
@@ -773,7 +773,7 @@ public:
 
 为了能够让算法分辨出出入迭代器的属性进而采用不同的实现，一种最简单的方法就是在算法内部使用`if-elese`的方法在执行期动态裁决。但是这种方法依赖于执行期裁决，非常影响程序效率，因此STL采用了静态多态——重载函数解析机制来让算法在编译的时候就能针对不同的迭代器调用不同的具体实现函数。
 
-为了实现这一目的，①SGI STL会在[stl_iterator_base.h](stl_iterator_base.h)文件中定义如下5个迭代器类别标签类：
+为了实现这一目的，①SGI STL会在[stl_iterator_base.h](2.Iterator\stl_iterator_base.h)文件中定义如下5个迭代器类别标签类：
 
 ```c++
 struct input_iterator_tag {};
@@ -822,7 +822,7 @@ void advance(Iterator &iter, Dist n) {
 
 
 
-在实际的SGI STL源代码中临时对象的创建并不是按照我上面所写的那样，因为这种方式需要对每一个算法都再做typedef或者using。重复的东西应该从中剥离处理，独立成函数模块，以避免冗余。所以SGI STL源代码中编写了一些像`iterator_category()`这样的函数来负责创建临时标签类对象，这些源代码大致在源文件[stl_iterator_base.h](stl_iterator_base.h)的141行：
+在实际的SGI STL源代码中临时对象的创建并不是按照我上面所写的那样，因为这种方式需要对每一个算法都再做typedef或者using。重复的东西应该从中剥离处理，独立成函数模块，以避免冗余。所以SGI STL源代码中编写了一些像`iterator_category()`这样的函数来负责创建临时标签类对象，这些源代码大致在源文件[stl_iterator_base.h](2.Iterator\stl_iterator_base.h)的141行：
 
 ```c++
 template <class _Iter>
@@ -871,7 +871,7 @@ value_type(const _Iter& __i) { return __value_type(__i); }
 
 ### 3.4 迭代器基类iterator
 
-为了抽取出所有迭代器中的一些共有重复成员类型，SGI STL定义了一个名为iterator的基类。注意该迭代器基类的作用并不是像《*Design Pattern*》那样做多态来使用，它唯一的作用仅仅就只有继承，方便抽离出所有迭代器共有的属性罢了。该类模板的定义大致在源代码文件[stl_iterator_base.h](stl_iterator_base.h)的94行
+为了抽取出所有迭代器中的一些共有重复成员类型，SGI STL定义了一个名为iterator的基类。注意该迭代器基类的作用并不是像《*Design Pattern*》那样做多态来使用，它唯一的作用仅仅就只有继承，方便抽离出所有迭代器共有的属性罢了。该类模板的定义大致在源代码文件[stl_iterator_base.h](2.Iterator\stl_iterator_base.h)的94行
 
 ```c++
 template <class _Category, class _Tp, class _Distance = ptrdiff_t,
