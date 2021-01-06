@@ -85,7 +85,7 @@ typename Vector<T>::Iterator Vector<T>::end() {
 }
 ```
 
-文件[test.cpp](test.cpp)大致按照上面的想法实现了一个简单的Vector及其迭代器VectorIterator。
+文件[iterator_test.cpp](iterator_test.cpp)大致按照上面的想法实现了一个简单的Vector及其迭代器VectorIterator。
 
 
 

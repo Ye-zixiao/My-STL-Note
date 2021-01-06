@@ -15,13 +15,12 @@ struct random_access_iterator_tag : public bidirectional_iterator_tag {};
 template<typename Category, typename T, typename Distance=ptrdiff_t,
 	typename Pointer=T *, typename Reference=T &>
 struct Iterator {
-	typedef Category iterator_category;
-	typedef Distance difference_type;
-	typedef T value_type;
-	typedef Pointer pointer;
-	typedef Reference reference;
+	using iterator_category = Category;
+	using value_type = T;
+	using pointer = Pointer;
+	using reference = Reference;
+	using difference_type = Distance;
 };
-
 
 template<typename T>
 class VectorIterator;
@@ -30,17 +29,20 @@ class VectorIterator;
 template<typename T>
 class Vector {
 public:
-	Vector(std::initializer_list<T> il) :
+	using Iterator = VectorIterator<T>;
+
+	Vector(const std::initializer_list<T> &il) :
 		_data_start(new int[il.size()]), _data_end(_data_start + il.size()) {
 		std::copy(il.begin(), il.end(), _data_start);
 	}
 	~Vector() {
 		delete[] _data_start;
 	}
+
 	/*  ...  */
-	typedef VectorIterator<T> Iterator;
 	Iterator begin();
 	Iterator end();
+
 private:
 	T *_data_start;
 	T *_data_end;
@@ -49,19 +51,19 @@ private:
 
 //容器相关迭代器的实现
 template<typename T>
-class VectorIterator: public Iterator<random_access_iterator_tag, T> {
+class VectorIterator : public Iterator<random_access_iterator_tag, T> {
 public:
-//	typedef T value_type;
-//	typedef T *                         pointer;
-//	typedef T &                         reference;
-//	typedef ptrdiff_t difference_type;
-//	typedef random_access_iterator_tag iterator_category;
+	using _Base = Iterator<random_access_iterator_tag, T>;
+	using iterator_category = typename _Base::iterator_category;
+	using value_type = typename _Base::value_type;
+	using pointer = typename _Base::pointer;
+	using reference = typename _Base::reference;
+	using difference_type = typename _Base::difference_type;
 
-	explicit VectorIterator(T *p) :
-		_data_pointer(p) {}
+	explicit VectorIterator(T *p) : _data_pointer(p) {}
 	/*  ...  */
-	T* operator->() { return _data_pointer; }
-	T &operator*() { return *_data_pointer; }
+	pointer operator->() { return _data_pointer; }
+	reference operator*() { return *_data_pointer; }
 	VectorIterator &operator++() {
 		++_data_pointer;
 		return *this;
@@ -75,18 +77,19 @@ public:
 		_data_pointer += n;
 		return *this;
 	}
+
+	bool operator==(const VectorIterator &rhs) const {
+		return this->_data_pointer == rhs._data_pointer;
+	}
+
+	bool operator!=(const VectorIterator &rhs) const {
+		return !operator==(rhs);
+	}
 	/*  ...  */
 
 private:
 	T *_data_pointer;
 };
-
-
-
-template<typename T>
-bool operator!=(VectorIterator<T> lhs, VectorIterator<T> rhs) {
-	return lhs.operator->() != rhs.operator->();
-}
 
 //容器迭代器生成函数的实现
 template<typename T>
@@ -160,25 +163,11 @@ void advance(Iterator &iter, Dist n) {
 	advance(iter, n, iter_category());
 }
 
-
-
 int main() {
-	Vector<int> vec{1, 2, 23, 34, 4};
-	for (auto iter = vec.begin(); iter != vec.end(); ++iter)
+	Vector<int> ivec{1, 2, 4, 5, 66};
+	for (auto iter = ivec.begin(); iter != ivec.end(); ++iter)
 		std::cout << *iter << ' ';
 	std::cout << std::endl;
-	std::cout << "vec accumulate: " << accumulate(vec.begin(), vec.end()) << std::endl;
-
-	int arr[] = {1, 2, 2, 34, 46, 7};
-	std::cout << "arr accumulate: " << accumulate(std::begin(arr), std::end(arr)) << std::endl;
-
-	auto iter = vec.begin();
-	std::cout << *iter << std::endl;
-	advance(iter, 2);
-	std::cout << *iter << std::endl;
-
-	VectorIterator<int>::value_type val;
 
 	return 0;
 }
-

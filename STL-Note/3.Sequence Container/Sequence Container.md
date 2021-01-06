@@ -92,7 +92,7 @@ public:
 
 
 
-#### 4.1.2 vector的构造过程
+#### 4.1.2 vector的构造/销毁过程
 
 vector的构造函数在《STL源码剖析》所使用的源码和我所阅读的V3.3版本中的构造函数有许多不同之处，但可以说两者实质上的构造过程并没有什么太多的不同，它们都会经历如下3个步骤：①allocate--->②fill--->③initialize。
 
@@ -322,17 +322,97 @@ iterator erase(iterator __first, iterator __last) {
 
 list的实现位于源文件[stl_list.h](stl_list.h)，其中比较需要关注的几个部分如下所示：
 
-1. **list的数据结构、内存样貌**；
-2. **构造、析构过程**；
+1. **list的数据结构，结点、迭代器**；
+2. 构造、析构过程，比较简单我不细述；
 3. **插入`insert()`和删除`erase()`操作**；
 4. **链表迁移`transfer()`操作及其衍生操作**，包括`splice()`、`merge()`和`sort()`等操作；
 5. 其他操作，看看就好。
 
 > 至于list到底支持哪些操作，可以通过访问https://zh.cppreference.com/w/cpp/container/list来查看。
 
+文件[list_test.cpp](list_test.cpp)大致实现了list的一些功能，该文件仅仅做展示作用。需要注意的是在这种模板+继承的C++编程中需要特别注意模板派生类使用模板基类名字的一个问题：**若模板派生类需要使用模板基类的名字时，则编译器会因为默认情况下不进入基类的作用域查找该名字而使得派生类无法直接使用模板基类的名字**（包括成员类型、成员函数）。这一点在《effective C++》中的第43条有着详细的说明。
 
 
-#### 4.2.1 list的数据结构
+
+#### 4.2.1 list结点和迭代器
+
+在SGI STL V3.3版本的实现中，无论是list的结点实现还是迭代器的实现，甚至list的实现都是采用一个二级的继承体系，也就是说我们本来想象中可以用一个类完成的结构，在这份源码中都是采用一个基类+派生类的方式完成。甚至在当前的g++中的STL实现中仍然保持了这种风格。
+
+对于list的结点而言，它有一个名为_List_node_base的基类，它封装了指向前后基类结点的指针，然后真正完整的结点类\_List_node继承自它，并附加了一个模板形式的数据成员。同样的，对于list的迭代器，它有一个名为\_List_iterator_base的基类，它封装了一个指向结点基类的指针，且大多数关乎于这个指针的操作都是在基类中完成，然后真正完整的迭代器类\_List_iterator继承自它。
+
+<img src="../../image/list_iterator.jpg" alt="list_iterator" style="zoom: 50%;" />
+
+这些代码大致位于源代码的第43行：
+
+```c++
+//结点的实现
+struct _List_node_base {
+  _List_node_base* _M_next;
+  _List_node_base* _M_prev;
+};
+
+template <class _Tp>
+struct _List_node : public _List_node_base {
+  _Tp _M_data;
+};
+
+//迭代器实现
+template <class _Tp>
+struct _List_node : public _List_node_base {
+  _Tp _M_data;
+};
+
+struct _List_iterator_base {
+  typedef size_t                     size_type;
+  typedef ptrdiff_t                  difference_type;
+  typedef bidirectional_iterator_tag iterator_category;
+
+  //这个_M_node是直接公开的，即使是现如今g++也是怎么做的
+  _List_node_base* _M_node;
+
+  _List_iterator_base(_List_node_base* __x) : _M_node(__x) {}
+  _List_iterator_base() {}
+
+  void _M_incr() { _M_node = _M_node->_M_next; }
+  void _M_decr() { _M_node = _M_node->_M_prev; }
+
+  bool operator==(const _List_iterator_base& __x) const {
+    return _M_node == __x._M_node;
+  }
+  bool operator!=(const _List_iterator_base& __x) const {
+    return _M_node != __x._M_node;
+  }
+};  
+
+template<class _Tp, class _Ref, class _Ptr>
+struct _List_iterator : public _List_iterator_base {
+  typedef _List_iterator<_Tp,_Tp&,_Tp*>             iterator;
+  typedef _List_iterator<_Tp,const _Tp&,const _Tp*> const_iterator;
+  typedef _List_iterator<_Tp,_Ref,_Ptr>             _Self;
+
+  typedef _Tp value_type;
+  typedef _Ptr pointer;
+  typedef _Ref reference;
+  typedef _List_node<_Tp> _Node;
+
+  _List_iterator(_Node* __x) : _List_iterator_base(__x) {}
+  _List_iterator() {}
+  _List_iterator(const iterator& __x) : _List_iterator_base(__x._M_node) {}
+  /* ... */
+};
+```
+
+
+
+#### 4.2.2 list的数据结构
+
+正如我们上面所讲的那样，SGI STL对list的实现也区分成一个基类和派生类，其中基类_List_base的主要工作就是封装了链表list中指向哨兵结点的指针，并且负责生成或者销毁一个结点以及对链表的初始化、析构等工作。而剩下的工作全部交给派生类list来完成。
+
+而且通过从派生类到基类观察list的构造过程可以发现**list的组织形式是一个环状双向链表，并且链表中总会有一个哨兵结点**（即_M_node指向的那个）**，它既是起始结点的前驱结点又是尾后结点，它并不存储任何有效的数据**。这种技巧在leetcode算法题中经常使用，其最大的好处在于它仅仅需要付出一个结点空间的代价就可以很方便的完成结点插入、删除的工作，而不需要对头结点或尾结点做特殊处理。具体如下图所示：
+
+<img src="../../image/list.jpg" alt="list" style="zoom: 50%;" />
+
+list基类_List_base的实现：
 
 ```c++
 template <class _Tp, class _Alloc>
@@ -342,6 +422,7 @@ public:
   typedef _Alloc allocator_type;
   allocator_type get_allocator() const { return allocator_type(); }
 
+  /* 在链表构造之初，只有一个哨兵结点，且其前后指针都指向自己 */
   _List_base(const allocator_type&) {
     _M_node = _M_get_node();
     _M_node->_M_next = _M_node;
@@ -356,15 +437,19 @@ public:
 
 protected:
   typedef simple_alloc<_List_node<_Tp>, _Alloc> _Alloc_type;
+  //通过分配器分配一个结点的空间
   _List_node<_Tp>* _M_get_node() { return _Alloc_type::allocate(1); }
+  //通过分配器销毁一个结点的空间
   void _M_put_node(_List_node<_Tp>* __p) { _Alloc_type::deallocate(__p, 1); } 
+  /* 而对于派生类list而言，它还会在分配工作的基础上做一个初始化
+  	以及在销毁之前析构的工作，例如_M_create_node()、_M_destroy_node() */
 
 protected:
   _List_node<_Tp>* _M_node;
 };
 ```
 
-
+list派生类实现：
 
 ```c++
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
@@ -400,57 +485,15 @@ public:
 
 
 
-
-
-#### 4.2.2 list的构造过程
-
-在SGI STL V3.3的源代码中，可以发现list的构造函数的样貌大致和vector相同，基类负责最主要的工作，派生类仅仅就是对基类中构造函数的借用而已。
-
-```c++
-template <class _Tp, class _Alloc>
-class _List_base 
-{
-public:
-  typedef _Alloc allocator_type;
-  allocator_type get_allocator() const { return allocator_type(); }
-
-  _List_base(const allocator_type&) {
-    _M_node = _M_get_node();
-    _M_node->_M_next = _M_node;
-    _M_node->_M_prev = _M_node;
-  }
-  ~_List_base() {
-    clear();
-    _M_put_node(_M_node);
-  }
-
-  void clear();
-
-protected:
-  typedef simple_alloc<_List_node<_Tp>, _Alloc> _Alloc_type;
-  _List_node<_Tp>* _M_get_node() { return _Alloc_type::allocate(1); }
-  void _M_put_node(_List_node<_Tp>* __p) { _Alloc_type::deallocate(__p, 1); } 
-
-protected:
-  _List_node<_Tp>* _M_node;
-};
-
-//派生类list部分：
-template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
-class list : protected _List_base<_Tp, _Alloc> {
-	/* ... */
-public:
-  explicit list(const allocator_type& __a = allocator_type()) : _Base(__a) {}
-    
-    /* ... */
-};
-```
+#### 4.2.3 list的构造/销毁过程
 
 
 
-#### 4.2.3 元素的插入与删除
 
-##### 4.2.3.1 元素插入操作
+
+#### 4.2.4 元素的插入与删除
+
+##### 4.2.4.1 元素插入操作
 
 所有链表list上添加元素的操作，无论是`push_back()`、`push_front()`都是借由`insert()`单元素任意插入操作实现的，甚至范围元素插入操作也都是由这个单元素操作通过逐一插入实现而来的。
 
@@ -476,7 +519,7 @@ list<_Tp, _Alloc>::insert(iterator __position,
 
 
 
-##### 4.2.3.2 元素删除操作
+##### 4.2.4.2 元素删除操作
 
 而与上面的情况相同，所有链表list上的删除元素操作，无论是`pop_back()`、`pop_front()`都是借由`erase()`任意单元素插入操作实现而来的，甚至范围元素删除的操作也是由这个单元素删除操作逐次调用而来的。
 
@@ -495,9 +538,9 @@ iterator erase(iterator __position) {
 
 
 
-#### 4.2.4 元素迁移与衍生操作
+#### 4.2.5 ==元素迁移与衍生操作==
 
-##### 4.2.4.1 元素迁移操作
+##### 4.2.5.1 元素迁移操作
 
 ```c++
 protected:
@@ -535,7 +578,7 @@ public:
 
 
 
-##### 4.2.4.2 元素迁移的衍生操作
+##### 4.2.5.2 元素迁移的衍生操作
 
 ```c++
 void list<_Tp, _Alloc>::merge(list<_Tp, _Alloc>& __x)
