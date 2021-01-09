@@ -126,7 +126,7 @@ void list_base<T, Alloc>::clear() {
 }
 
 template<typename T, typename Alloc=std::allocator<list_node<T>>>
-class list : public list_base<T, Alloc> {
+class list : protected list_base<T, Alloc> {
 public:
 	using _Base = list_base<T, Alloc>;
 	using iterator = list_iterator<T>;

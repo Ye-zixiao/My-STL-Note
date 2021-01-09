@@ -92,7 +92,7 @@ public:
 
 
 
-#### 4.1.2 vector的构造/销毁过程
+#### 4.1.2 vector的构造/析构过程
 
 vector的构造函数在《STL源码剖析》所使用的源码和我所阅读的V3.3版本中的构造函数有许多不同之处，但可以说两者实质上的构造过程并没有什么太多的不同，它们都会经历如下3个步骤：①allocate--->②fill--->③initialize。
 
@@ -159,7 +159,7 @@ class vector : protected _Vector_base<_Tp, _Alloc>
 
 
 
-#### 4.1.3 元素插入与空间的动态增长
+#### 4.1.3 ==元素插入与空间动态增长==
 
 ##### 4.1.3.1 单元素插入
 
@@ -323,7 +323,7 @@ iterator erase(iterator __first, iterator __last) {
 list的实现位于源文件[stl_list.h](stl_list.h)，其中比较需要关注的几个部分如下所示：
 
 1. **list的数据结构，结点、迭代器**；
-2. 构造、析构过程，比较简单我不细述；
+2. **构造、析构过程**；
 3. **插入`insert()`和删除`erase()`操作**；
 4. **链表迁移`transfer()`操作及其衍生操作**，包括`splice()`、`merge()`和`sort()`等操作；
 5. 其他操作，看看就好。
@@ -336,9 +336,9 @@ list的实现位于源文件[stl_list.h](stl_list.h)，其中比较需要关注�
 
 #### 4.2.1 list结点和迭代器
 
-在SGI STL V3.3版本的实现中，无论是list的结点实现还是迭代器的实现，甚至list的实现都是采用一个二级的继承体系，也就是说我们本来想象中可以用一个类完成的结构，在这份源码中都是采用一个基类+派生类的方式完成。甚至在当前的g++中的STL实现中仍然保持了这种风格。
+在SGI STL V3.3版本的实现中，无论是list的结点实现还是迭代器的实现，甚至list的实现都是采用一个二级的继承体系。也就是说我们本来想象中可以用一个类完成的结构，在这份源码中都是采用一个基类+派生类的方式完成，甚至在当前的g++中的STL实现中仍然保持了这种风格。
 
-对于list的结点而言，它有一个名为_List_node_base的基类，它封装了指向前后基类结点的指针，然后真正完整的结点类\_List_node继承自它，并附加了一个模板形式的数据成员。同样的，对于list的迭代器，它有一个名为\_List_iterator_base的基类，它封装了一个指向结点基类的指针，且大多数关乎于这个指针的操作都是在基类中完成，然后真正完整的迭代器类\_List_iterator继承自它。
+对于list的结点而言，它有一个名为`_List_node_base`的基类，它封装了指向前后基类结点的指针，然后真正完整的结点类`_List_node`继承自它，并附加了一个模板形式的数据成员。同样的，对于list的迭代器，它有一个名为`_List_iterator_base`的基类，它封装了一个指向结点基类的指针，且大多数关乎于这个指针的操作都是在基类中完成，然后真正完整的迭代器类`_List_iterator`继承自它。
 
 <img src="../../image/list_iterator.jpg" alt="list_iterator" style="zoom: 50%;" />
 
@@ -406,9 +406,9 @@ struct _List_iterator : public _List_iterator_base {
 
 #### 4.2.2 list的数据结构
 
-正如我们上面所讲的那样，SGI STL对list的实现也区分成一个基类和派生类，其中基类_List_base的主要工作就是封装了链表list中指向哨兵结点的指针，并且负责生成或者销毁一个结点以及对链表的初始化、析构等工作。而剩下的工作全部交给派生类list来完成。
+正如我们上面所讲的那样，SGI STL对list的实现也区分成一个基类和派生类。其中基类`_List_base`的主要工作就是封装了链表list中指向哨兵结点的指针，并且负责生成或者销毁一个结点以及对链表的初始化、析构等工作，而剩下的工作全部交给派生类list来完成。
 
-而且通过从派生类到基类观察list的构造过程可以发现**list的组织形式是一个环状双向链表，并且链表中总会有一个哨兵结点**（即_M_node指向的那个）**，它既是起始结点的前驱结点又是尾后结点，它并不存储任何有效的数据**。这种技巧在leetcode算法题中经常使用，其最大的好处在于它仅仅需要付出一个结点空间的代价就可以很方便的完成结点插入、删除的工作，而不需要对头结点或尾结点做特殊处理。具体如下图所示：
+通过从派生类到基类观察list的构造过程可以发现：**list的组织形式是一个环状双向链表，并且链表中总会有一个哨兵结点**（即_M_node指向的那个）**，它既是起始结点的前驱结点又是尾后结点，它并不存储任何有效的数据**。这种技巧在leetcode算法题中经常使用，其最大的好处在于它仅仅需要付出一个结点空间的代价就可以很方便的完成结点插入、删除的工作，而不需要对头结点或尾结点做特殊处理。具体如下图所示：
 
 <img src="../../image/list.jpg" alt="list" style="zoom: 50%;" />
 
@@ -437,12 +437,8 @@ public:
 
 protected:
   typedef simple_alloc<_List_node<_Tp>, _Alloc> _Alloc_type;
-  //通过分配器分配一个结点的空间
   _List_node<_Tp>* _M_get_node() { return _Alloc_type::allocate(1); }
-  //通过分配器销毁一个结点的空间
   void _M_put_node(_List_node<_Tp>* __p) { _Alloc_type::deallocate(__p, 1); } 
-  /* 而对于派生类list而言，它还会在分配工作的基础上做一个初始化
-  	以及在销毁之前析构的工作，例如_M_create_node()、_M_destroy_node() */
 
 protected:
   _List_node<_Tp>* _M_node;
@@ -485,13 +481,98 @@ public:
 
 
 
-#### 4.2.3 list的构造/销毁过程
+#### 4.2.3 list的构造/析构过程
 
+任何一个链表无论它怎么构造都需要建立在一个空链表的构造完成的前提下才能继续。至于一个空链表的构造基本上在基类`_List_base`中就得到了完成，而基类做的就是仅仅分配出一个哨兵结点（有些人会将之称为哑结点，因为它不存储任何数据），然后将其前驱和后继都设置为自己，如下图所示：
 
+<img src="../../image/屏幕截图 2021-01-09 192413.png" alt="屏幕截图 2021-01-09 192413" style="zoom: 80%;" />
+
+```c++
+template <class _Tp, class _Alloc>
+class _List_base 
+{
+public:
+  typedef _Alloc allocator_type;
+  allocator_type get_allocator() const { return allocator_type(); }
+
+  _List_base(const allocator_type&) {
+    _M_node = _M_get_node();
+    _M_node->_M_next = _M_node;
+    _M_node->_M_prev = _M_node;
+  }
+  ~_List_base() {
+    clear();
+    _M_put_node(_M_node);
+  }
+
+  void clear();
+
+protected:
+  typedef simple_alloc<_List_node<_Tp>, _Alloc> _Alloc_type;
+  _List_node<_Tp>* _M_get_node() { return _Alloc_type::allocate(1); }
+  void _M_put_node(_List_node<_Tp>* __p) { _Alloc_type::deallocate(__p, 1); } 
+
+protected:
+  _List_node<_Tp>* _M_node;
+};
+
+template <class _Tp, class _Alloc>
+void 
+_List_base<_Tp,_Alloc>::clear() 
+{
+  _List_node<_Tp>* __cur = (_List_node<_Tp>*) _M_node->_M_next;
+  while (__cur != _M_node) {
+    _List_node<_Tp>* __tmp = __cur;
+    __cur = (_List_node<_Tp>*) __cur->_M_next;
+    _Destroy(&__tmp->_M_data);
+    _M_put_node(__tmp);
+  }
+  _M_node->_M_next = _M_node;
+  _M_node->_M_prev = _M_node;
+}
+```
+
+而链表的析构也非常简单，它首先会执行`clear()`操作将链表进行清空，然后调用protected成员函数`_M_put_node()`将哨兵结点进行销毁。
 
 
 
 #### 4.2.4 元素的插入与删除
+
+在正式介绍list元素结点的插入和删除操作实现之前，我们首先需要看一下list的结点是如何实现分配、构造初始化、析构和销毁的。其中结点空间的分配和销毁是在基类\_List_base中得到实现的，而结点的构造初始化是在派生类list中实现的，且是在基类中空间分配函数的基础上完成的。而结点的析构在SGI STL V3.3版本中并没有对应的操作，因为它实际上完全可以用STL算法`destroy()`和基类`_M_put_node()`间接完成，这并不是什么大问题。
+
+```c++
+//_List_base基类中：
+protected:
+  typedef simple_alloc<_List_node<_Tp>, _Alloc> _Alloc_type;
+  //使用空间分配器分配出一个链表结点的空间
+  _List_node<_Tp>* _M_get_node() { return _Alloc_type::allocate(1); }
+  //使用空间分配器销毁指定结点的空间
+  void _M_put_node(_List_node<_Tp>* __p) { _Alloc_type::deallocate(__p, 1); } 
+
+//list类中：
+protected:
+  _Node* _M_create_node(const _Tp& __x)
+  {
+    _Node* __p = _M_get_node();
+    __STL_TRY {
+      _Construct(&__p->_M_data, __x);
+    }
+    __STL_UNWIND(_M_put_node(__p));
+    return __p;
+  }
+
+  _Node* _M_create_node()
+  {
+    _Node* __p = _M_get_node();
+    __STL_TRY {
+      _Construct(&__p->_M_data);
+    }
+    __STL_UNWIND(_M_put_node(__p));
+    return __p;
+  }
+```
+
+
 
 ##### 4.2.4.1 元素插入操作
 
@@ -507,6 +588,7 @@ iterator insert(iterator __position, const _Tp& __x) {
     return __tmp;
 }
 
+//范围元素插入
 template <class _Tp, class _Alloc>
 void 
 list<_Tp, _Alloc>::insert(iterator __position, 
@@ -515,13 +597,16 @@ list<_Tp, _Alloc>::insert(iterator __position,
     for ( ; __first != __last; ++__first)
         insert(__position, *__first);
 }
+
+//push_back的实现
+void push_back(const _Tp& __x) { insert(end(), __x); }
 ```
 
 
 
 ##### 4.2.4.2 元素删除操作
 
-而与上面的情况相同，所有链表list上的删除元素操作，无论是`pop_back()`、`pop_front()`都是借由`erase()`任意单元素插入操作实现而来的，甚至范围元素删除的操作也是由这个单元素删除操作逐次调用而来的。
+而与上面的情况相同，所有链表list上的删除元素操作，无论是`pop_back()`、`pop_front()`、`remove()`都是借由`erase()`任意单元素删除操作实现而来的，甚至范围元素删除的操作也是由这个单元素删除操作逐次调用而来的。
 
 ```c++
 iterator erase(iterator __position) {
@@ -542,6 +627,10 @@ iterator erase(iterator __position) {
 
 ##### 4.2.5.1 元素迁移操作
 
+元素迁移操作可以认为是一种比较特殊的插入操作，因为它插入的不是新的链表结点元素，而是从链表一个位置上截下一段然后插入到当前链表或者另一个链表上的指定位置上。因此它最直观的就有两个步骤：①将指定的链表结点（串链）从原始的链表中截取下来，②然后将其插入到指定链表的某个位置上。但实际实现时，它一般是一边截取一边插入（调整相关的指针），如下图所示：
+
+<img src="../../image/屏幕截图 2021-01-09 192617.png" alt="屏幕截图 2021-01-09 192617" style="zoom:80%;" />
+
 ```c++
 protected:
   void transfer(iterator __position, iterator __first, iterator __last) {
@@ -558,7 +647,16 @@ protected:
       __first._M_node->_M_prev    = __tmp;
     }
   }
+```
 
+
+
+##### 4.2.5.2 元素迁移的衍生操作
+
+链表list中的元素迁移操作是list中很多操作实现的重要前提，因为向双链表中的结点提供了一个非常灵活的移动能力。通过`transfer()`操作我们可以很好的实现链表拼接操作`splice()`、链表的有序归并操作`merge()`，以及基于有序归并实现的双链表归并算法`sort()`。
+
+```c++
+//双链表拼接splice实现：
 public:
   void splice(iterator __position, list& __x) {
     if (!__x.empty()) 
@@ -574,19 +672,17 @@ public:
     if (__first != __last) 
       this->transfer(__position, __first, __last);
   }
-```
 
-
-
-##### 4.2.5.2 元素迁移的衍生操作
-
-```c++
+//两个有序链表的归并merge实现：
+template <class _Tp, class _Alloc>
 void list<_Tp, _Alloc>::merge(list<_Tp, _Alloc>& __x)
 {
   iterator __first1 = begin();
   iterator __last1 = end();
   iterator __first2 = __x.begin();
   iterator __last2 = __x.end();
+  /* 若两个链表的first迭代器都没有到达末尾，则从两个链表中选择一个
+    当前较大元素迁移到相应的位置 */
   while (__first1 != __last1 && __first2 != __last2)
     if (*__first2 < *__first1) {
       iterator __next = __first2;
@@ -595,10 +691,12 @@ void list<_Tp, _Alloc>::merge(list<_Tp, _Alloc>& __x)
     }
     else
       ++__first1;
+  //若链表__x经上面的遍历后还有剩余，则将剩余的结点串链插入到当前链表的末尾
   if (__first2 != __last2) transfer(__last1, __first2, __last2);
 }
 
-//reverse的实现并没有使用transfer操作，因为这样相比于swap来的低效
+/* 在SGI STL V3.3中reverse操作的实现并不是借助迁移操作来实现的，
+	这里需要注意下 */
 inline void __List_base_reverse(_List_node_base* __p)
 {
   _List_node_base* __tmp = __p;
@@ -613,8 +711,19 @@ inline void list<_Tp, _Alloc>::reverse()
 {
   __List_base_reverse(this->_M_node);
 }    
+```
 
-/* 这里用的是归并排序，而并非书上所述的快速排序 */
+
+
+双链表list的排序实现其实就是一种典型的自底向上归并排序（《STL源码剖析》生成其采用了快速排序，这是错误的）。
+
+在排序前，它会生成一个用作临时存放元素的链表\_\_carry（为什么概念上将其归为临时呢？因为它并不会记录上一轮存放进入的结点元素，而后面64个好歹会），以及64个辅助存放链表（这意味着它最高允许将归并的层数达到64层）。
+
+当排序开始后，它每一次迭代都会从源链表中剪下一个结点，若\_\__counter[0]有元素存在，则它和当前读入结点元素进行有序归并；归并后若发现下一层的\_\_counter[1]也存在元素，则\_\_counter[1]会继续和它进行归并；此次贵宾后若仍然发现下一层的\_\_counter[2]也存在元素，则继续归并。。。。直到归并到有一层的下一层不再存在元素。当最外面的while循环结束后，辅助存放链表\_\_counter[]中会有部分链表仍然存放一些链表有序片段，还有些则没有，所以我们需要从0到63逐次归并到\_\_counter[63]，然后交换会当前链表中，这样我们就完成了整个排序过程。说了这么多，不如来一个图示清楚：
+
+<img src="../../image/mergesort.jpg" alt="mergesort" style="zoom: 50%;" />
+
+```c++
 template <class _Tp, class _Alloc>
 void list<_Tp, _Alloc>::sort()
 {
@@ -623,6 +732,7 @@ void list<_Tp, _Alloc>::sort()
     list<_Tp, _Alloc> __carry;
     list<_Tp, _Alloc> __counter[64];
     int __fill = 0;
+      
     while (!empty()) {
       __carry.splice(__carry.begin(), *this, begin());
       int __i = 0;
@@ -641,7 +751,55 @@ void list<_Tp, _Alloc>::sort()
 }
 ```
 
+在上面的代码中有一个细节你会发现，那就是fill的值好像没有上限，若只要出现\_\_i==\_\_fill一直出现，是否意味着__fill有可能超过64进而导致越界访问，最终发生段错误？其实通过计算上面得出的序列：第1层最多容纳元素1个、第2层最多容纳元素2个、第3层最多容纳元素3个、第4层最多容纳元素6个、第5层最多容纳元素12个......就可以发现第$i$层所能容纳的元素符合下式：
+$$
+第i层所能容纳的元素个数=\left\{
+\begin{array}{rcl}
+i	&	&	1\leq{i}<3\\
+3\times{2}^{i-3}	&	&	3\leq{i}<64
+\end{array}
+\right.
+$$
+那么可以预估得到从第63层刚刚归并到64层的时候，64层就正好有$3\times2^{61}$个元素结点，很难想象有什么常规的排序会对这么多元素进行排序。所以正常的情况下\_\_fill几乎不可能超过64这个数。一般情况下的时间复杂度为$NlogN$。
+
 
 
 ### 4.3 deque
 
+#### 4.3.1 deque的数据结构
+
+
+
+#### 4.3.2 deque迭代器
+
+
+
+#### 4.3.3 ==deque的构造/析构过程==
+
+
+
+#### 4.3.4 deque的插入操作
+
+##### 4.3.4.1 后向插入
+
+
+
+##### 4.3.4.2 前向插入
+
+
+
+##### 4.3.4.3 任意插入
+
+
+
+#### 4.3.5 deque的删除操作
+
+##### 4.3.5.1 后向删除
+
+
+
+##### 4.3.5.2 前向删除
+
+
+
+##### 4.3.5.3 任意删除

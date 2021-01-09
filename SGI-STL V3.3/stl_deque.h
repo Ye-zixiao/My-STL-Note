@@ -96,10 +96,10 @@ struct _Deque_iterator {
 
   typedef _Deque_iterator _Self;
 
-  _Tp* _M_cur;
-  _Tp* _M_first;
-  _Tp* _M_last;
-  _Map_pointer _M_node;
+  _Tp* _M_cur;//指向当前元素
+  _Tp* _M_first;//当前缓冲区首指针
+  _Tp* _M_last;//当前缓冲区尾后指针
+  _Map_pointer _M_node;//指向map数组（控制中心，一个指针数组的指针）
 
   _Deque_iterator(_Tp* __x, _Map_pointer __y) 
     : _M_cur(__x), _M_first(*__y),
@@ -349,10 +349,14 @@ protected:
   enum { _S_initial_map_size = 8 };
 
 protected:
+  /*老版本中是：
+    typedef value_type** map_pointer;
+    map_pointer _M_map;
+  */
   _Tp** _M_map;
   size_t _M_map_size;  
-  iterator _M_start;
-  iterator _M_finish;
+  iterator _M_start;  //指向缓冲区中的第一个元素
+  iterator _M_finish; //指向缓冲区中的尾后元素
 
   typedef simple_alloc<_Tp, _Alloc>  _Node_alloc_type;
   typedef simple_alloc<_Tp*, _Alloc> _Map_alloc_type;
@@ -379,26 +383,35 @@ _Deque_base<_Tp,_Alloc>::~_Deque_base() {
   }
 }
 
+/* 初始化map位图并分配出缓冲区 */
 template <class _Tp, class _Alloc>
 void
 _Deque_base<_Tp,_Alloc>::_M_initialize_map(size_t __num_elements)
 {
+  //1、计算deque需要用到几个缓冲区，这个node指的是map中的元素（指针）个数
   size_t __num_nodes = 
     __num_elements / __deque_buf_size(sizeof(_Tp)) + 1;
 
+  //2、默认最少也会分配8个node（代表默认会分配出8个缓冲区）
   _M_map_size = max((size_t) _S_initial_map_size, __num_nodes + 2);
   _M_map = _M_allocate_map(_M_map_size);
 
+  //3、使nstart和nfinish指向map（位图）中的最中央
   _Tp** __nstart = _M_map + (_M_map_size - __num_nodes) / 2;
   _Tp** __nfinish = __nstart + __num_nodes;
-    
+
+  /* 上面1-3是为了做分配map的工作，而下面是做分配缓冲区工作，并将各缓冲区
+    起始地址设置到上面的map相应元素上 */  
+
   __STL_TRY {
+    //4、分配指定个数缓冲区
     _M_create_nodes(__nstart, __nfinish);
   }
   __STL_UNWIND((_M_deallocate_map(_M_map, _M_map_size), 
                 _M_map = 0, _M_map_size = 0));
   _M_start._M_set_node(__nstart);
   _M_finish._M_set_node(__nfinish - 1);
+  //deque中从_M_start指向缓冲区的第一个位置开始存放
   _M_start._M_cur = _M_start._M_first;
   _M_finish._M_cur = _M_finish._M_first +
                __num_elements % __deque_buf_size(sizeof(_Tp));
@@ -423,6 +436,8 @@ _Deque_base<_Tp,_Alloc>::_M_destroy_nodes(_Tp** __nstart, _Tp** __nfinish)
     _M_deallocate_node(*__n);
 }
 
+
+//可以看到现在的deque并不能像早先的deque那样设置bufsize
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
 class deque : protected _Deque_base<_Tp, _Alloc> {
 
@@ -1055,8 +1070,10 @@ template <class _Tp, class _Alloc>
 void deque<_Tp,_Alloc>::_M_fill_initialize(const value_type& __value) {
   _Map_pointer __cur;
   __STL_TRY {
+    //逐个缓冲区进行填充
     for (__cur = _M_start._M_node; __cur < _M_finish._M_node; ++__cur)
       uninitialized_fill(*__cur, *__cur + _S_buffer_size(), __value);
+    //因为最后一个缓冲区可能并不是所有的元素都是需要填充的，所以只需要对部分进行填充
     uninitialized_fill(_M_finish._M_first, _M_finish._M_cur, __value);
   }
   __STL_UNWIND(destroy(_M_start, iterator(*__cur, __cur)));

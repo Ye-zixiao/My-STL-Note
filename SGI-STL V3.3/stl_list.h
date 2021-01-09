@@ -750,6 +750,8 @@ void list<_Tp, _Alloc>::merge(list<_Tp, _Alloc>& __x)
   iterator __last1 = end();
   iterator __first2 = __x.begin();
   iterator __last2 = __x.end();
+  /* 若两个链表的first迭代器都没有到达末尾，则从两个链表中选择一个
+    当前较大元素迁移到相应的位置 */
   while (__first1 != __last1 && __first2 != __last2)
     if (*__first2 < *__first1) {
       iterator __next = __first2;
@@ -758,6 +760,7 @@ void list<_Tp, _Alloc>::merge(list<_Tp, _Alloc>& __x)
     }
     else
       ++__first1;
+  //若链表__x经上面的遍历后还有剩余，则将剩余的结点串链插入到当前链表的末尾
   if (__first2 != __last2) transfer(__last1, __first2, __last2);
 }
 
@@ -785,6 +788,7 @@ void list<_Tp, _Alloc>::sort()
     list<_Tp, _Alloc> __carry;
     list<_Tp, _Alloc> __counter[64];
     int __fill = 0;
+    
     while (!empty()) {
       __carry.splice(__carry.begin(), *this, begin());
       int __i = 0;
