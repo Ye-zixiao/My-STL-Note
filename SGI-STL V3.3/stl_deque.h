@@ -96,10 +96,10 @@ struct _Deque_iterator {
 
   typedef _Deque_iterator _Self;
 
-  _Tp* _M_cur;//指向当前元素
-  _Tp* _M_first;//当前缓冲区首指针
-  _Tp* _M_last;//当前缓冲区尾后指针
-  _Map_pointer _M_node;//指向map数组（控制中心，一个指针数组的指针）
+  _Tp* _M_cur;          //指向当前元素
+  _Tp* _M_first;        //当前缓冲区首指针
+  _Tp* _M_last;         //当前缓冲区尾后指针
+  _Map_pointer _M_node; //指向当前迭代器所属缓冲区在缓冲区图map上的元素
 
   _Deque_iterator(_Tp* __x, _Map_pointer __y) 
     : _M_cur(__x), _M_first(*__y),
@@ -353,10 +353,10 @@ protected:
     typedef value_type** map_pointer;
     map_pointer _M_map;
   */
-  _Tp** _M_map;
+  _Tp** _M_map;       //指向缓冲区图（一个指针数组）
   size_t _M_map_size;  
-  iterator _M_start;  //指向缓冲区中的第一个元素
-  iterator _M_finish; //指向缓冲区中的尾后元素
+  iterator _M_start;  //指向deque中的第一个有效元素
+  iterator _M_finish; //指向deque中的最后一个有效元素
 
   typedef simple_alloc<_Tp, _Alloc>  _Node_alloc_type;
   typedef simple_alloc<_Tp*, _Alloc> _Map_alloc_type;
@@ -396,7 +396,7 @@ _Deque_base<_Tp,_Alloc>::_M_initialize_map(size_t __num_elements)
   _M_map_size = max((size_t) _S_initial_map_size, __num_nodes + 2);
   _M_map = _M_allocate_map(_M_map_size);
 
-  //3、使nstart和nfinish指向map（位图）中的最中央
+  //3、使nstart和nfinish指向map（位图）中的最中央的位置
   _Tp** __nstart = _M_map + (_M_map_size - __num_nodes) / 2;
   _Tp** __nfinish = __nstart + __num_nodes;
 
@@ -404,7 +404,7 @@ _Deque_base<_Tp,_Alloc>::_M_initialize_map(size_t __num_elements)
     起始地址设置到上面的map相应元素上 */  
 
   __STL_TRY {
-    //4、分配指定个数缓冲区
+    //4、分配指定个数缓冲区，但至少会分出一个node
     _M_create_nodes(__nstart, __nfinish);
   }
   __STL_UNWIND((_M_deallocate_map(_M_map, _M_map_size), 
@@ -615,6 +615,7 @@ public:
   // The range version is a member template, so we dispatch on whether
   // or not the type is an integer.
 
+  //整体填充赋值
   void _M_fill_assign(size_type __n, const _Tp& __val) {
     if (__n > size()) {
       fill(begin(), end(), __val);
@@ -877,6 +878,7 @@ protected:                        // Internal insert functions
  
 #endif /* __STL_MEMBER_TEMPLATES */
 
+  //在deque首元素前面预分配多少个元素，并根据情况分配出新的缓冲区
   iterator _M_reserve_elements_at_front(size_type __n) {
     size_type __vacancies = _M_start._M_cur - _M_start._M_first;
     if (__n > __vacancies) 
@@ -901,6 +903,7 @@ protected:                      // Allocation of _M_map and nodes
   //  deque iterators.)
 
   void _M_reserve_map_at_back (size_type __nodes_to_add = 1) {
+    //若map（缓冲区图在_M_finish之后没有剩余空间，则需要重新分配缓冲区图）
     if (__nodes_to_add + 1 > _M_map_size - (_M_finish._M_node - _M_map))
       _M_reallocate_map(__nodes_to_add, false);
   }
@@ -1025,6 +1028,8 @@ deque<_Tp,_Alloc>::erase(iterator __first, iterator __last)
   else {
     difference_type __n = __last - __first;
     difference_type __elems_before = __first - _M_start;
+    /* 若清除区间前面的元素数量较少，则将前面的元素进行向后拷贝，
+      然后再清除前面多余出来的元素 */
     if (__elems_before < difference_type((this->size() - __n) / 2)) {
       copy_backward(_M_start, __first, __last);
       iterator __new_start = _M_start + __n;
@@ -1032,6 +1037,7 @@ deque<_Tp,_Alloc>::erase(iterator __first, iterator __last)
       _M_destroy_nodes(__new_start._M_node, _M_start._M_node);
       _M_start = __new_start;
     }
+    //若清除区间后面的元素数量较少
     else {
       copy(__last, _M_finish, __first);
       iterator __new_finish = _M_finish - __n;
@@ -1046,6 +1052,8 @@ deque<_Tp,_Alloc>::erase(iterator __first, iterator __last)
 template <class _Tp, class _Alloc> 
 void deque<_Tp,_Alloc>::clear()
 {
+  /* 将缓冲区图map首node和尾node之间node指向的缓冲区进行销毁，
+    使clear之后只保留一个空缓冲区 */
   for (_Map_pointer __node = _M_start._M_node + 1;
        __node < _M_finish._M_node;
        ++__node) {
@@ -1139,7 +1147,7 @@ void deque<_Tp,_Alloc>::_M_push_back_aux(const value_type& __t)
 template <class _Tp, class _Alloc>
 void deque<_Tp,_Alloc>::_M_push_back_aux()
 {
-  _M_reserve_map_at_back();
+  _M_reserve_map_at_back();//若达到了某种条件则需要更新map（缓冲区图）
   *(_M_finish._M_node + 1) = _M_allocate_node();
   __STL_TRY {
     construct(_M_finish._M_cur);
@@ -1276,6 +1284,8 @@ typename deque<_Tp,_Alloc>::iterator
 deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos)
 {
   difference_type __index = __pos - _M_start;
+  /* 若插入点前面的元素数量较少，则现在front()前的位置上新键一个元素，然后以
+    拷贝的方式让插入点前面的元素向前移动一步，然后在多出来的空位置上插入值 */
   if (__index < size() / 2) {
     push_front(front());
     iterator __front1 = _M_start;
@@ -1287,6 +1297,7 @@ deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos)
     ++__pos1;
     copy(__front2, __pos1, __front1);
   }
+  //若插入点后面的元素数量较多
   else {
     push_back(back());
     iterator __back1 = _M_finish;
@@ -1308,11 +1319,14 @@ void deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos,
   const difference_type __elems_before = __pos - _M_start;
   size_type __length = this->size();
   value_type __x_copy = __x;
+
   if (__elems_before < difference_type(__length / 2)) {
     iterator __new_start = _M_reserve_elements_at_front(__n);
     iterator __old_start = _M_start;
     __pos = _M_start + __elems_before;
     __STL_TRY {
+      /* 若插入位置前面的元素比欲插入元素的数量还要多，那么这就需要涉及到
+      1、未初始化拷贝；2、普通拷贝；3、填充 这三个过程 */
       if (__elems_before >= difference_type(__n)) {
         iterator __start_n = _M_start + difference_type(__n);
         uninitialized_copy(_M_start, __start_n, __new_start);
@@ -1321,6 +1335,8 @@ void deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos,
         fill(__pos - difference_type(__n), __pos, __x_copy);
       }
       else {
+      /* 若插入位置前面的元素比欲插入元素的数量少，那么就需要涉及到一个
+        1、未初始化拷贝；2、未初始化填充；3、普通填充 这三个过程 */
         __uninitialized_copy_fill(_M_start, __pos, __new_start, 
                                   _M_start, __x_copy);
         _M_start = __new_start;
