@@ -33,6 +33,7 @@ struct _Slist_node_base
   _Slist_node_base* _M_next;
 };
 
+//向__prev_node后插入新的结点
 inline _Slist_node_base*
 __slist_make_link(_Slist_node_base* __prev_node,
                   _Slist_node_base* __new_node)
@@ -271,7 +272,7 @@ struct _Slist_base {
   allocator_type get_allocator() const { return allocator_type(); }
 
   _Slist_base(const allocator_type&) { _M_head._M_next = 0; }
-  ~_Slist_base() { _M_erase_after(&_M_head, 0); }
+  ~_Slist_base() { _M_erase_after(&_M_head, 0); }//将除_M_head后面的结点全部干掉
 
 protected:
   typedef simple_alloc<_Slist_node<_Tp>, _Alloc> _Alloc_type;
@@ -290,7 +291,7 @@ protected:
   _Slist_node_base* _M_erase_after(_Slist_node_base*, _Slist_node_base*);
 
 protected:
-  _Slist_node_base _M_head;
+  _Slist_node_base _M_head;//做单链表前面的哨兵结点
 };  
 
 #endif /* __STL_USE_STD_ALLOCATORS */
@@ -358,6 +359,9 @@ private:
     __STL_UNWIND(this->_M_put_node(__node));
     return __node;
   }
+
+  /* 和list的实现一样，基类定义了get_node()、put_node()，派生类只定义
+    一个create_node()，但并不会实现destroy_node()辅助函数 */
 
 public:
   explicit slist(const allocator_type& __a = allocator_type()) : _Base(__a) {}

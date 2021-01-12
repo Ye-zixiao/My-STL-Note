@@ -1,6 +1,6 @@
 ### 4.3 deque
 
-deque，可以认为是vector的增强版，很好的支持了后向和前向增删元素的操作。其实现位于源文件[stl_deque.h](stl_deque.h)，对于它我们比较需要关注如下几个点：
+deque，可以认为是vector的增强版，支持后向和前向双端开口元素增删操作。其实现位于源文件[stl_deque.h](stl_deque.h)，对于它我们比较需要关注如下几个点：
 
 1. **数据结构和内存样貌**
 2. **迭代器的实现**，观察它如何实现在两个不连续的内存缓冲区之间执行步进操作
@@ -15,7 +15,7 @@ deque，可以认为是vector的增强版，很好的支持了后向和前向增
 
 #### 4.3.1 deque的数据结构
 
-在SGI STL V3.3中，deque的实现和前面vector、list这些容器一样，都是通过继承以两级的形式实现而来。其中基类`_Deque_base`定义了最为重要的数据成员、构造函数、析构函数以及关于缓冲区创建/销毁的辅助函数。这段代码大致在源代码的328行：
+在SGI STL V3.3中，deque的实现和前面vector、list类似，都是通过继承以两级的形式实现而来。其中基类`_Deque_base`定义了最为重要的数据成员、构造函数、析构函数以及关于缓冲区创建/销毁的辅助函数。这段代码大致在源代码的328行：
 
 ```c++
 template <class _Tp, class _Alloc>
@@ -49,7 +49,7 @@ class deque : protected _Deque_base<_Tp, _Alloc> {
 };
 ```
 
-我们可以从上面的代码看到，双向队列deque之所以能够很好的支持前向插入、前向删除、后向插入、后向删除这些操作，是因为**deque它不像vector那样只维护一个连续的内存缓冲区，而是通过一个缓冲区指针数组**（因为代码中记为map，所以我称之为缓冲区图或者缓冲区指针图）**来维护多个连续的内存缓冲区**。不过缓冲区之间并不连续，这也是实现时最需要克服的。如下图所示：
+我们可以从上面的代码看到，deque之所以能够很好的支持前后端原书添加和删除操作，是因为**deque它不像vector那样只维护一个连续的内存缓冲区，而是通过一个缓冲区指针数组**（因为代码中记为map，所以我称之为缓冲区图或者缓冲区指针图）**来维护多个连续的内存缓冲区**。当前向插入时发现缓冲区不足时，就会分配新的缓冲区并将其地址赋给map中有效指针元素前面元素，以此达到扩展内存缓冲区的目的。向后添加元素时发现缓冲区不足也是同样的道理。实现deque最大的难点就在于缓冲区之间是不连续的。
 
 <img src="../../image/屏幕截图 2021-01-10 115229.png" alt="屏幕截图 2021-01-10 115229" style="zoom: 67%;" />
 
@@ -59,7 +59,7 @@ class deque : protected _Deque_base<_Tp, _Alloc> {
 
 #### 4.3.2 deque迭代器
 
-由于deque的各个有效存储元素可能存放在不同的缓冲区中，仅仅常规的指针无法做得到在这样不连续的多个缓冲区上进行步进游走，所以**deque的迭代器不仅需要记录当前元素指针、当前指向元素所在的缓冲区起始、末尾指针，还需要记录缓冲区（指针）图map上指向当前缓冲区指针的指针**（即一个二级指针，这句话虽然说起来有点绕，在代码中命名为node，我暂时称之为map指针），这个二级指针可以帮助我们更改当前所使用的缓冲区。如下图所示：
+由于deque的各个有效存储元素可能存放在不同的缓冲区中，所以**deque的迭代器不仅需要记录当前元素指针cur、当前指向元素所在的缓冲区起始first、尾后指针last，还需要记录缓冲区（指针）图map上指向当前缓冲区指针的指针**（即一个二级指针，这句话虽然说起来有点绕。在代码中命名为node，我暂时称之为map node指针），这个二级指针可以帮助我们更改当前指向元素所处的缓冲区。如下图所示：
 
 <img src="../../image/deque_iterator.jpg" alt="deque_iterator" style="zoom: 50%;" />
 
@@ -83,10 +83,10 @@ struct _Deque_iterator {
   typedef _Deque_iterator _Self;
 
   _Tp* _M_cur;          //指向当前元素
-  _Tp* _M_first;        //当前缓冲区首指针
-  _Tp* _M_last;         //当前缓冲区尾后指针
+  _Tp* _M_first;        //当前缓冲区起始
+  _Tp* _M_last;         //当前缓冲区尾后
   _Map_pointer _M_node; //指向缓冲区图map中指向当前缓冲区指针的指针
-
+    
   _Deque_iterator(_Tp* __x, _Map_pointer __y) 
     : _M_cur(__x), _M_first(*__y),
       _M_last(*__y + _S_buffer_size()), _M_node(__y) {}
@@ -94,11 +94,12 @@ struct _Deque_iterator {
   _Deque_iterator(const iterator& __x)
     : _M_cur(__x._M_cur), _M_first(__x._M_first), 
       _M_last(__x._M_last), _M_node(__x._M_node) {}
+
   /* ... */
 };
 ```
 
-deque迭代器最重要的工作就是将各种各样与指针操作相关的运算符进行重载，其中最为关键的几个运算符应该是`++`、`--`、`+=`这些。重载这些运算符都会借助到一个名为`_M_set_node()`的辅助成员函数，它的职责就是更新当前的map指针。
+deque迭代器最重要的工作就是将各种各样与指针操作相关的运算符进行重载，其中最为关键的几个运算符应该是`++`、`--`、`+=`这些。重载这些运算符都会借助到一个名为`_M_set_node()`的辅助成员函数，它的职责就是不仅map node指针，然后依此更新first、last成员。
 
 ```c++
   void _M_set_node(_Map_pointer __new_node) {
@@ -107,6 +108,8 @@ deque迭代器最重要的工作就是将各种各样与指针操作相关的运
     _M_last = _M_first + difference_type(_S_buffer_size());
   }
 ```
+
+这些迭代器向前或者向后步进操作起始很简单，若预料到步进后不会造成cur指针越界，那么直接更新cur当前指针即可；若预料到步进会造成越界，那么需要执行如下2步：①步进map node指针，然后用新的map node指针更新first和last成员；②更新cur当前指针（这两步在不同的操作中可能顺序不一样）。
 
 ```c++
   _Self& operator++() {
@@ -117,13 +120,115 @@ deque迭代器最重要的工作就是将各种各样与指针操作相关的运
     }
     return *this; 
   }
+
+  _Self& operator+=(difference_type __n)
+  {
+    difference_type __offset = __n + (_M_cur - _M_first);
+    if (__offset >= 0 && __offset < difference_type(_S_buffer_size()))
+      _M_cur += __n;
+    else {
+      difference_type __node_offset =
+        __offset > 0 ? __offset / difference_type(_S_buffer_size())
+                   : -difference_type((-__offset - 1) / _S_buffer_size()) - 1;
+      _M_set_node(_M_node + __node_offset);
+      _M_cur = _M_first + 
+        (__offset - __node_offset * difference_type(_S_buffer_size()));
+    }
+    return *this;
+  }
 ```
 
 
 
-
-
 #### 4.3.3 ==deque的构造/析构过程==
+
+deque的构造过程还是比较复杂的，我们只要了解默认构造过程和范围元素填充构造过程就足够了。无论是deque默认的构造（开始时容器为空）还是范围元素填充构造（开始时容器不为空），其有一大部分工作都是由同一个基类构造函数完成，而基类构造函数中的大部分工作又是通过一个名为`_M_initialize_map()`的辅助函数来完成。
+
+它的工作主要是根据初始时需要的元素数量，分配出map数组，然后分配出足量的缓冲区并将它们的地址存到map数组中，最后更新first、last这两个迭代器中的数据。完成这些后，其deque内部的元素都还没有被构造，仅仅分配了空间，而元素的构造是deque那个需要范围元素填充数据的派生类构造函数的责任，默认构造函数没有这种负担。
+
+基类的构造函数在源文件的337行：
+
+```c++
+template <class _Tp, class _Alloc>
+class _Deque_base {
+public:
+  /* ... */
+  _Deque_base(const allocator_type&, size_t __num_elements)
+    : _M_map(0), _M_map_size(0),  _M_start(), _M_finish() {
+    _M_initialize_map(__num_elements);
+    //完成基类构造函数后，deque基本成型，但里面的元素还没有被构造
+  }
+  /* ... */
+};
+
+template <class _Tp, class _Alloc>
+void
+_Deque_base<_Tp,_Alloc>::_M_initialize_map(size_t __num_elements)
+{
+  //1、计算deque需要用到几个缓冲区，其中一定有一个多余的备用缓冲区
+  size_t __num_nodes = 
+    __num_elements / __deque_buf_size(sizeof(_Tp)) + 1;
+
+  //2、默认最少也会分配出大小为8的缓冲区指针数组
+  _M_map_size = max((size_t) _S_initial_map_size, __num_nodes + 2);
+  _M_map = _M_allocate_map(_M_map_size);
+
+  //3、使nstart和nfinish指向map（位图）中的最中央的位置
+  _Tp** __nstart = _M_map + (_M_map_size - __num_nodes) / 2;
+  _Tp** __nfinish = __nstart + __num_nodes;
+
+  /* 上面1-3是为了做分配map的工作，而下面是做分配缓冲区工作，并将各缓冲区
+    起始地址设置到上面的map相应元素上 */  
+
+  __STL_TRY {
+    /* 4、分配指定个数缓冲区，但至少会分出一个缓冲区，
+      并将相应的指针赋给map数组中相应的元素node */
+    _M_create_nodes(__nstart, __nfinish);
+  }
+  __STL_UNWIND((_M_deallocate_map(_M_map, _M_map_size), 
+                _M_map = 0, _M_map_size = 0));
+  //5、更新start、finish迭代器的first、last、node成员
+  _M_start._M_set_node(__nstart);
+  _M_finish._M_set_node(__nfinish - 1);
+  //6、更新start、finish迭代器的当前指向元素指针cur
+  _M_start._M_cur = _M_start._M_first;
+  _M_finish._M_cur = _M_finish._M_first +
+               __num_elements % __deque_buf_size(sizeof(_Tp));
+}
+```
+
+派生类deque的构造函数在源文件的546行：
+
+```c++
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class deque : protected _Deque_base<_Tp, _Alloc> {
+    /* ... */
+public:                         // Constructor, destructor.
+  //默认构造
+  explicit deque(const allocator_type& __a = allocator_type()) 
+    : _Base(__a, 0) {}
+  //范围元素填充构造
+  deque(size_type __n, const value_type& __value,
+        const allocator_type& __a = allocator_type()) : _Base(__a, __n)
+    { _M_fill_initialize(__value); }
+   /* ... */
+};
+
+template <class _Tp, class _Alloc>
+void deque<_Tp,_Alloc>::_M_fill_initialize(const value_type& __value) {
+  _Map_pointer __cur;
+  __STL_TRY {
+    //逐个缓冲区进行填充
+    for (__cur = _M_start._M_node; __cur < _M_finish._M_node; ++__cur)
+      uninitialized_fill(*__cur, *__cur + _S_buffer_size(), __value);
+    //因为最后一个缓冲区可能并不是所有的元素都有效，所以只需要对部分进行填充
+    uninitialized_fill(_M_finish._M_first, _M_finish._M_cur, __value);
+  }
+  __STL_UNWIND(destroy(_M_start, iterator(*__cur, __cur)));
+}
+```
+
+而析构函数的实现就很简单了，它首先会对deque容器中的所有元素进行析构，然后释放掉缓冲区，最后释放掉map数组所占的空间。
 
 
 
@@ -131,13 +236,19 @@ deque迭代器最重要的工作就是将各种各样与指针操作相关的运
 
 ##### 4.3.4.1 缓冲区图的重新分配
 
+deque能够在前端或者后端插入新的元素的前提是缓冲区足够或者能够新增，而缓冲区能够新增的前提是位图空间充足，所以我们有必要在理解添加元素操作之前看一下缓冲区图map的重新分配实现原理。
+
+而缓冲区图map的重新分配又需要针对是前端插入新元素还是后端插入新元素两种情况做不同的处理，为什么要如此区分？因为缓冲区图map的空间有可能是假象，实际上map空间是足够的，只不过map上有效元素指针（代码中称为node）可能出现分布偏移的现象，如下图所示。针对这种情况我们不用重新分配map空间，只需要做一个偏移矫正的操作就可以了。
+
+<img src="../../image/偏移矫正.jpg" alt="偏移矫正" style="zoom: 50%;" />
+
+造成这种现象的主要原因就是用户几乎只在做`push_back()`的操作而没有`push_front()`，还夹杂着一些`pop_front()`的操作，导致缓冲区空间一直在向后增长；或者相反的情况。
+
 ```c++
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class deque : protected _Deque_base<_Tp, _Alloc> {
+  /* ... */
 protected:                      // Allocation of _M_map and nodes
-
-  // Makes sure the _M_map has space for new nodes.  Does not actually
-  //  add the nodes.  Can invalidate _M_map pointers.  (And consequently, 
-  //  deque iterators.)
-
   void _M_reserve_map_at_back (size_type __nodes_to_add = 1) {
     //若map（缓冲区图在_M_finish之后没有剩余空间，则需要重新分配缓冲区图）
     if (__nodes_to_add + 1 > _M_map_size - (_M_finish._M_node - _M_map))
@@ -148,11 +259,9 @@ protected:                      // Allocation of _M_map and nodes
     if (__nodes_to_add > size_type(_M_start._M_node - _M_map))
       _M_reallocate_map(__nodes_to_add, true);
   }
-```
+  /* ... */
+};
 
-
-
-```c++
 template <class _Tp, class _Alloc>
 void deque<_Tp,_Alloc>::_M_reallocate_map(size_type __nodes_to_add,
                                           bool __add_at_front)
@@ -162,6 +271,8 @@ void deque<_Tp,_Alloc>::_M_reallocate_map(size_type __nodes_to_add,
 
   _Map_pointer __new_nstart;
   if (_M_map_size > 2 * __new_num_nodes) {
+    /* 若map空间不足是假象，是由于上面的有效元素指针（即代码中称呼的node）
+    	分布发生偏移造成的，那么仅仅只要做个偏移矫正操作即可 */
     __new_nstart = _M_map + (_M_map_size - __new_num_nodes) / 2 
                      + (__add_at_front ? __nodes_to_add : 0);
     if (__new_nstart < _M_start._M_node)
@@ -171,6 +282,7 @@ void deque<_Tp,_Alloc>::_M_reallocate_map(size_type __nodes_to_add,
                     __new_nstart + __old_num_nodes);
   }
   else {
+      //否则重新分配map图
     size_type __new_map_size = 
       _M_map_size + max(_M_map_size, __nodes_to_add) + 2;
 
@@ -193,7 +305,16 @@ void deque<_Tp,_Alloc>::_M_reallocate_map(size_type __nodes_to_add,
 
 ##### 4.3.4.2 前/后插入
 
+前后插入基本上都有类似的实现过程：
+
+1. 检测当前缓冲区是否足够，若足够执行在这个缓冲区构造即可；
+2. 否则先检测map图的空间是否足够，若map图空间不足，则重新分配map（若map的空间不足是由于有效元素node分布偏倚造成的，那么进行做偏移矫正操作，不用重新分配map图）；
+3. 然后在指定的位置上生成新的边缘缓冲区，然后进行元素构造和first或者last迭代器的更新
+
 ```c++
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class deque : protected _Deque_base<_Tp, _Alloc> {
+  /* ... */
 public:                         // push_* and pop_*
   
   void push_back(const value_type& __t) {
@@ -213,11 +334,9 @@ public:                         // push_* and pop_*
     else
       _M_push_front_aux(__t);
   }
-```
+    /* ... */
+};
 
-
-
-```c++
 template <class _Tp, class _Alloc>
 void deque<_Tp,_Alloc>::_M_push_back_aux()
 {
@@ -413,6 +532,9 @@ void deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos,
 ##### 4.3.5.1 前/后删除
 
 ```c++
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class deque : protected _Deque_base<_Tp, _Alloc> {
+  /* ... */
   void pop_back() {
     if (_M_finish._M_cur != _M_finish._M_first) {
       --_M_finish._M_cur;
@@ -430,11 +552,9 @@ void deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos,
     else 
       _M_pop_front_aux();
   }
-```
+  /* ... */
+};
 
-
-
-```c++
 template <class _Tp, class _Alloc>
 void deque<_Tp,_Alloc>::_M_pop_back_aux()
 {
@@ -451,7 +571,7 @@ void deque<_Tp,_Alloc>::_M_pop_front_aux()
   _M_deallocate_node(_M_start._M_first);
   _M_start._M_set_node(_M_start._M_node + 1);
   _M_start._M_cur = _M_start._M_first;
-}   
+} 
 ```
 
 
@@ -539,6 +659,4 @@ deque<_Tp,_Alloc>::erase(iterator __first, iterator __last)
 ```
 
 
-
-### 4.4 stack
 

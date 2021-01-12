@@ -388,11 +388,11 @@ template <class _Tp, class _Alloc>
 void
 _Deque_base<_Tp,_Alloc>::_M_initialize_map(size_t __num_elements)
 {
-  //1、计算deque需要用到几个缓冲区，这个node指的是map中的元素（指针）个数
+  //1、计算deque需要用到几个缓冲区，其中一定有一个多余的备用缓冲区
   size_t __num_nodes = 
     __num_elements / __deque_buf_size(sizeof(_Tp)) + 1;
 
-  //2、默认最少也会分配8个node（代表默认会分配出8个缓冲区）
+  //2、默认最少也会分配出大小为8的缓冲区指针数组
   _M_map_size = max((size_t) _S_initial_map_size, __num_nodes + 2);
   _M_map = _M_allocate_map(_M_map_size);
 
@@ -404,14 +404,16 @@ _Deque_base<_Tp,_Alloc>::_M_initialize_map(size_t __num_elements)
     起始地址设置到上面的map相应元素上 */  
 
   __STL_TRY {
-    //4、分配指定个数缓冲区，但至少会分出一个node
+    /* 4、分配指定个数缓冲区，但至少会分出一个缓冲区，
+      并将相应的指针赋给map数组中相应的元素node */
     _M_create_nodes(__nstart, __nfinish);
   }
   __STL_UNWIND((_M_deallocate_map(_M_map, _M_map_size), 
                 _M_map = 0, _M_map_size = 0));
+  //5、更新start、finish迭代器的first、last、node成员
   _M_start._M_set_node(__nstart);
   _M_finish._M_set_node(__nfinish - 1);
-  //deque中从_M_start指向缓冲区的第一个位置开始存放
+  //6、更新start、finish迭代器的当前指向元素指针cur
   _M_start._M_cur = _M_start._M_first;
   _M_finish._M_cur = _M_finish._M_first +
                __num_elements % __deque_buf_size(sizeof(_Tp));

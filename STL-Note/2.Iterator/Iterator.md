@@ -62,11 +62,6 @@ public:
 		++_data_pointer;
 		return *this;
 	}
-	const T operator++(int) {
-		VectorIterator tmp(*this);
-		++*this;
-		return tmp;
-	}
 	/*  ...  */
 
 private:
@@ -214,7 +209,7 @@ accumulate(Iterator beg, Iterator end) {
 
 ### 3.3 ==迭代器分类iterator_category==
 
-#### 3.3.1 迭代器分类
+#### 3.3.1 迭代器的分类
 
 正如我们在上面的所述，为了能够让迭代器特性类iterator_traits从传入的迭代器中提取出迭代器相应类别的信息，每一个容器相关的迭代器都应该在内部定义出上述的5个成员类型：value_type、difference_type、pointer、reference和iterator_category。它们代表的意义非常容易理解，其内部的实现仅仅就是在迭代器内部用一个typedef或者using定义出一个类型成员即可：
 
@@ -236,7 +231,7 @@ public:
 4. **双向迭代器Bidirectional Iterator**：迭代器可以向前向后步进，但每次步进步伐仍然只能一步
 5. **随机访问迭代器Random Access Iterator**：该迭代器步进支持向前向后步进，还支持任意步的步进
 
-它们从上到下存在这一种扩展强化能力的关系，我们可以用如下图展示这种关系，虽然书中指出这并不是一种继承关系但从代码的角度它们确实利用了继承：
+它们从上到下存在这一种扩展强化能力的关系，如下图（虽然书中指出这并不是一种继承关系但从代码的角度它们确实利用了继承）：
 
 <img src="../../image/屏幕截图 2021-01-02 101430.png" alt="屏幕截图 2021-01-02 101430" style="zoom:80%;" />
 
@@ -293,11 +288,38 @@ void advance(Iterator &iter, Dist n) {
 }
 ```
 
-> 为了展示实现的方式，这里尽可能不展露太多的细节，因此advance这里也仅仅支持向前步进，也不对双向迭代器这种情况做处理。
 
 
+#### 3.3.3 迭代器相关类型临时对象产生函数
 
-在实际的SGI STL源代码中临时对象的创建并不是按照我上面所写的那样，因为这种方式需要对每一个算法都再做typedef或者using。重复的东西应该从中剥离处理，独立成函数模块，以避免冗余。所以SGI STL源代码中编写了一些像`iterator_category()`这样的函数来负责创建临时标签类对象，这些源代码大致在源文件[stl_iterator_base.h](stl_iterator_base.h)的141行：
+> ~~在上面中，我们生成迭代器标签临时类对象的目的是为了帮助算法内部的实现函数能够获知其所作用迭代器的类型，方便重载函数解析，以对不同的迭代器采取不同的执行策略。而在另一方面，算法的内部实现函数还可能需要传入除iterator_category之外相关类型的临时对象，以帮助算法实现函数模板在实例化时嫩能够成功完成模板参数的推断。~~
+
+由此可知，**STL中借由迭代器实现的算法，不仅需要iterator_traits这样的工具获知迭代器的相关类型，而且还可能随时要求向算法内部的函数传入一个或多个迭代器相关（真实）类型的临时对象**。这样做主要是出于如下两个目的：①**算法需要临时对象借以重载函数解析机制以针对不同的迭代器采取不同的实现措施**；②**帮助模板类型参数的推断**（这一点可以参考后面`push_heap()`的实现了解。为什么要用模板参数？因为用模板类型参数定义变量比使用iterator_traits+using/typedef定义变量方便）。
+
+因此在STL算法的实际实现中，我们不可能像上面advance的实现那样为每一个迭代器、每一个算法使用using或者typedef生成迭代器相关类型临时对象。所以在SGI STL中定义了如下几个辅助函数将重复的动作剥离出来，以生成迭代器相关类型临时对象：
+
+- **`iterator_category()`**：可以从迭代器中提取出迭代器标签类信息，并生成一个临时迭代器iterator_category对象，以帮助被传递的（算法内部调用的具体实现）函数获知它所作用的迭代器类型；
+- **`value_type()`**：可以从迭代器中提取出所指向元素的数据类型，并生成一个临时迭代器value_type*的空指针，以帮助被传递的函数获知迭代器所指向元素的数据类型；
+- **`distance_type()`**：会从迭代器中提取其difference_type类型信息，并生成一个临时迭代器difference_type*的空指针，以帮助被传递函数获知迭代器的距离数据类型
+- ...
+
+借助这种思想，我们就可以以如下的形式重新实现上面我们自己的Vector和VectorIterator：
+
+```c++
+template<typename Iterator>
+typename Iterator_traits<Iterator>::iterator_category
+iterator_category(const Iterator &iter) {
+	using cate = typename Iterator_traits<Iterator>::iterator_category;
+	return cate();
+}
+
+template<typename Iterator, typename Dist>
+void advance(Iterator &iter, Dist n) {
+	advance(iter, n, iterator_category(iter));
+}
+```
+
+至于真正的这些函数实现源代码大致在源文件的141行：
 
 ```c++
 template <class _Iter>
@@ -334,17 +356,13 @@ distance_type(const _Iter& __i) { return __distance_type(__i); }
 template <class _Iter>
 inline typename iterator_traits<_Iter>::value_type*
 value_type(const _Iter& __i) { return __value_type(__i); }
-
-#define __ITERATOR_CATEGORY(__i) __iterator_category(__i)
-#define __DISTANCE_TYPE(__i)     __distance_type(__i)
-#define __VALUE_TYPE(__i)        __value_type(__i)
 ```
 
 在这个文件文件中还附带实现了我们上述所述的`advance()`步进算法和`distance()`迭代器距离算法。
 
 
 
-### 3.4 迭代器基类iterator
+### 3.4 ~~迭代器基类iterator~~
 
 为了抽取出所有迭代器中的一些共有重复成员类型，SGI STL定义了一个名为iterator的基类。注意该迭代器基类的作用并不是像《*Design Pattern*》那样做多态来使用，它唯一的作用仅仅就只有继承，方便抽离出所有迭代器共有的属性罢了。该类模板的定义大致在源代码文件[stl_iterator_base.h](stl_iterator_base.h)的94行
 
@@ -397,23 +415,7 @@ struct __false_type { };
 template <class _Tp>
 struct __type_traits { 
    typedef __true_type     this_dummy_member_must_be_first;
-                   /* Do not remove this member. It informs a compiler which
-                      automatically specializes __type_traits that this
-                      __type_traits template is special. It just makes sure that
-                      things work if an implementation is using a template
-                      called __type_traits for something unrelated. */
-
-   /* The following restrictions should be observed for the sake of
-      compilers which automatically produce type specific specializations 
-      of this class:
-          - You may reorder the members below if you wish
-          - You may remove any of the members below if you wish
-          - You must not rename members without making the corresponding
-            name change in the compiler
-          - Members you add will be treated like regular members unless
-            you add the appropriate support in the compiler. */
  
-
    typedef __false_type    has_trivial_default_constructor;
    typedef __false_type    has_trivial_copy_constructor;
    typedef __false_type    has_trivial_assignment_operator;

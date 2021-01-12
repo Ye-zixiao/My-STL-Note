@@ -112,12 +112,10 @@ template <class _RandomAccessIterator, class _Distance, class _Tp>
 void 
 __adjust_heap(_RandomAccessIterator __first, _Distance __holeIndex,
               _Distance __len, _Tp __value)
-              /* hostIndex指的是当前空洞元素的位置 */
 {
   _Distance __topIndex = __holeIndex;
   _Distance __secondChild = 2 * __holeIndex + 2;
   while (__secondChild < __len) {
-    //若左边的兄弟结点值比当前预判的孩子结点大，那么换一下下标
     if (*(__first + __secondChild) < *(__first + (__secondChild - 1)))
       __secondChild--;
     *(__first + __holeIndex) = *(__first + __secondChild);
@@ -136,10 +134,8 @@ inline void
 __pop_heap(_RandomAccessIterator __first, _RandomAccessIterator __last,
            _RandomAccessIterator __result, _Tp __value, _Distance*)
 {
-  //并没有删除最大值元素，仅仅将它放到容器（指定范围内）的最后位
   *__result = *__first;
   __adjust_heap(__first, _Distance(0), _Distance(__last - __first), __value);
-                      //这里传入的长度不是last-first+1！，所以二叉堆的长度被缩短了
 }
 
 template <class _RandomAccessIterator, class _Tp>
@@ -149,7 +145,6 @@ __pop_heap_aux(_RandomAccessIterator __first, _RandomAccessIterator __last,
 {
   __pop_heap(__first, __last - 1, __last - 1, 
              _Tp(*(__last - 1)), __DISTANCE_TYPE(__first));
-             //这里的__DISTANCE_TYPE仅仅是为了模板实参推断
 }
 
 template <class _RandomAccessIterator>
@@ -222,8 +217,6 @@ __make_heap(_RandomAccessIterator __first,
   if (__last - __first < 2) return;
   _Distance __len = __last - __first;
   _Distance __parent = (__len - 2)/2;
-  /* 从最后一个非叶子节点开始到根节点逐一执行下沉sink操作（算法4叫这名字，
-    不过这里SGI STL叫adjust_heap，无所谓🙃） */
     
   while (true) {
     __adjust_heap(__first, __parent, __len, _Tp(*(__first + __parent)));
