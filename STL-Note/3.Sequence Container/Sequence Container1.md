@@ -142,7 +142,7 @@ deque迭代器最重要的工作就是将各种各样与指针操作相关的运
 
 #### 4.3.3 ==deque的构造/析构过程==
 
-deque的构造过程还是比较复杂的，我们只要了解默认构造过程和范围元素填充构造过程就足够了。无论是deque默认的构造（开始时容器为空）还是范围元素填充构造（开始时容器不为空），其有一大部分工作都是由同一个基类构造函数完成，而基类构造函数中的大部分工作又是通过一个名为`_M_initialize_map()`的辅助函数来完成。
+deque的构造过程还是比较复杂的，我们只要了解默认构造过程和范围元素填充构造过程就足够了。无论是deque默认的构造（开始时容器为空）还是范围元素填充构造（开始时容器不为空），有一大部分工作都是由同一个基类构造函数完成，而基类构造函数中的大部分工作又是通过一个名为`_M_initialize_map()`的辅助函数来完成。
 
 它的工作主要是根据初始时需要的元素数量，分配出map数组，然后分配出足量的缓冲区并将它们的地址存到map数组中，最后更新first、last这两个迭代器中的数据。完成这些后，其deque内部的元素都还没有被构造，仅仅分配了空间，而元素的构造是deque那个需要范围元素填充数据的派生类构造函数的责任，默认构造函数没有这种负担。
 
@@ -236,13 +236,13 @@ void deque<_Tp,_Alloc>::_M_fill_initialize(const value_type& __value) {
 
 ##### 4.3.4.1 缓冲区图的重新分配
 
-deque能够在前端或者后端插入新的元素的前提是缓冲区足够或者能够新增，而缓冲区能够新增的前提是位图空间充足，所以我们有必要在理解添加元素操作之前看一下缓冲区图map的重新分配实现原理。
+deque能够在前端或者后端插入新的元素的前提是缓冲区足够或者能够新增，而缓冲区能够新增的前提是缓冲区图map空间充足，所以我们有必要在理解添加元素操作之前看一下缓冲区图map的重新分配实现过程。
 
-而缓冲区图map的重新分配又需要针对是前端插入新元素还是后端插入新元素两种情况做不同的处理，为什么要如此区分？因为缓冲区图map的空间有可能是假象，实际上map空间是足够的，只不过map上有效元素指针（代码中称为node）可能出现分布偏移的现象，如下图所示。针对这种情况我们不用重新分配map空间，只需要做一个偏移矫正的操作就可以了。
+而缓冲区图map的重新分配又需要针对是前端插入新元素还是后端插入新元素两种情况做不同的处理，为什么要如此区分？因为缓冲区图map的空间有可能是假象，实际上map空间是足够的，只不过map上有效元素指针（代码中称为node）可能出现分布偏移（向左或者向右）的现象，如下图展示的就是向右偏移的情况。针对这种情况我们不用重新分配map空间，只需要做一个偏移矫正的操作就可以了。
 
 <img src="../../image/偏移矫正.jpg" alt="偏移矫正" style="zoom: 50%;" />
 
-造成这种现象的主要原因就是用户几乎只在做`push_back()`的操作而没有`push_front()`，还夹杂着一些`pop_front()`的操作，导致缓冲区空间一直在向后增长；或者相反的情况。
+造成这种现象的主要原因就是用户几乎只在做`push_back()`的操作而没有`push_front()`，还夹杂着一些`pop_front()`的操作，导致缓冲区空间一直在向后增长；向左偏移的情况则相反。
 
 ```c++
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
@@ -305,11 +305,9 @@ void deque<_Tp,_Alloc>::_M_reallocate_map(size_type __nodes_to_add,
 
 ##### 4.3.4.2 前/后插入
 
-前后插入基本上都有类似的实现过程：
+前后插入`push_front/back()`的实现原理其实很简单：①若当前缓冲区空间足够，则直接在这个缓冲区上进行添加元素；②若缓冲区空间不足（或者已经到达缓冲区的边缘需要为下一次的添加元素预分配一个缓冲区），那么它会调用一个名为`_M_insert_front/back_aux()`的辅助函数。在这个辅助函数中，它会先调用上述的重新分配缓冲区图函数，以保证缓冲区图map空间是足够的。③最后在前/后分配出一个新的缓冲区空间，并更新deque中的finish迭代器。如下展示了`push_back()`的执行流程：
 
-1. 检测当前缓冲区是否足够，若足够执行在这个缓冲区构造即可；
-2. 否则先检测map图的空间是否足够，若map图空间不足，则重新分配map（若map的空间不足是由于有效元素node分布偏倚造成的，那么进行做偏移矫正操作，不用重新分配map图）；
-3. 然后在指定的位置上生成新的边缘缓冲区，然后进行元素构造和first或者last迭代器的更新
+<img src="../../image/insert_aux.jpg" alt="insert_aux" style="zoom:50%;" />
 
 ```c++
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
@@ -340,7 +338,7 @@ public:                         // push_* and pop_*
 template <class _Tp, class _Alloc>
 void deque<_Tp,_Alloc>::_M_push_back_aux()
 {
-  _M_reserve_map_at_back();//若达到了某种条件则需要更新map（缓冲区图）
+  _M_reserve_map_at_back();//保证缓冲区图map后面的空间足够
   *(_M_finish._M_node + 1) = _M_allocate_node();
   __STL_TRY {
     construct(_M_finish._M_cur);
@@ -372,7 +370,13 @@ void  deque<_Tp,_Alloc>::_M_push_front_aux(const value_type& __t)
 
 ###### 4.3.4.3.1 任意单元素插入
 
+单元素插入的实现也非常简单。①首先它会处理两种特殊的情况：刚好是前端插入或者后端插入，那么它会直接调用`push_back/front()`解决。②若插入的位置出于元素集合的内部，那么它会区分当前插入的位置是靠前还是靠后两种情况。③若是靠前，则在前端插入一个与首元素相同的元素，然后将插入位置前的元素集合向前移动一步；④若是靠后，则在后端插入一个与尾元素相同的元素，然后将插入位置后面的元素集合向后移动一步。最后将传递值赋给指定的插入位置。
+
 ```c++
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class deque : protected _Deque_base<_Tp, _Alloc> {
+  /* ... */
+public:
   iterator insert(iterator position, const value_type& __x) {
     if (position._M_cur == _M_start._M_cur) {
       push_front(__x);
@@ -388,9 +392,9 @@ void  deque<_Tp,_Alloc>::_M_push_front_aux(const value_type& __t)
       return _M_insert_aux(position, __x);
     }
   }
-```
+  /* ... */
+};
 
-```c++
 template <class _Tp, class _Alloc>
 typename deque<_Tp,_Alloc>::iterator 
 deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos)
@@ -424,14 +428,23 @@ deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos)
 }
 ```
 
+
+
 ###### 4.3.4.3.2 任意多元素插入
 
-```c++
-  void insert(iterator __pos, size_type __n, const value_type& __x)
-    { _M_fill_insert(__pos, __n, __x); }
-```
+相比于之前任意单元素的插入，任意多元素的插入可以说是比较复杂，但其实原理的和上面的单元素插入是一样的。①首先同样的，它会处理两种特殊的情况——前端或后端插入多个元素，那么它会先计算并准备好指定数量的元素空间，不够就分配新的缓冲区，然后构造每一个元素。②若是在内部进行插入，它同样的会区分出插入的位置是靠前还是靠后，若是靠前则在最前面计算并准备好指定数量的元素空间，然后将插入位置前面向前移动插入元素数量的步数，最后赋值插入多个元素（在这里其实有很多的细节需要考虑，具体看源代码）；③靠后略。
 
 ```c++
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class deque : protected _Deque_base<_Tp, _Alloc> {
+  /* ... */
+public:
+  void insert(iterator __pos, size_type __n, const value_type& __x)
+    { _M_fill_insert(__pos, __n, __x); }
+  /* ... */
+};
+
+//在指定迭代器前面填充式插入多个元素
 template <class _Tp, class _Alloc>
 void deque<_Tp, _Alloc>::_M_fill_insert(iterator __pos,
                                         size_type __n, const value_type& __x)
@@ -455,15 +468,11 @@ void deque<_Tp, _Alloc>::_M_fill_insert(iterator __pos,
     __STL_UNWIND(_M_destroy_nodes(_M_finish._M_node + 1, 
                                   __new_finish._M_node + 1));    
   }
-  //在中间位置插入
+  //在内部位置插入
   else 
     _M_insert_aux(__pos, __n, __x);
 }
-```
 
-
-
-```cpp
 template <class _Tp, class _Alloc>
 void deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos,
                                       size_type __n,
@@ -488,8 +497,7 @@ void deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos,
         fill(__pos - difference_type(__n), __pos, __x_copy);
       }
       else {
-      /* 若插入位置前面的元素比欲插入元素的数量少，那么就需要涉及到一个
-        1、未初始化拷贝；2、未初始化填充；3、普通填充 这三个过程 */
+      /* 若插入位置前面的元素比欲插入元素的数量少，那么也需要涉及上面三个过程 */
         __uninitialized_copy_fill(_M_start, __pos, __new_start, 
                                   _M_start, __x_copy);
         _M_start = __new_start;
@@ -525,11 +533,51 @@ void deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos,
 }
 ```
 
+下面展示了计算并预分配后面缓冲区的两个辅助函数`_M_reserver_elements_at_back()`和`_M_new_elements_at_back()`：
+
+```c++
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class deque : protected _Deque_base<_Tp, _Alloc> {
+  /* ... */
+protected:
+  iterator _M_reserve_elements_at_back(size_type __n) {
+    size_type __vacancies = (_M_finish._M_last - _M_finish._M_cur) - 1;
+    //检查当前缓冲区空间是否不足，若不足，则预分配缓冲区
+    if (__n > __vacancies)
+      _M_new_elements_at_back(__n - __vacancies);
+    return _M_finish + difference_type(__n);
+  }
+  /* ... */
+};
+  
+template <class _Tp, class _Alloc>
+void deque<_Tp,_Alloc>::_M_new_elements_at_back(size_type __new_elems)
+{
+  size_type __new_nodes
+      = (__new_elems + _S_buffer_size() - 1) / _S_buffer_size();
+  _M_reserve_map_at_back(__new_nodes);//确保缓冲区图map足够
+  size_type __i;
+  __STL_TRY {
+    for (__i = 1; __i <= __new_nodes; ++__i)
+      *(_M_finish._M_node + __i) = _M_allocate_node();
+  }
+#       ifdef __STL_USE_EXCEPTIONS
+  catch(...) {
+    for (size_type __j = 1; __j < __i; ++__j)
+      _M_deallocate_node(*(_M_finish._M_node + __j));      
+    throw;
+  }
+#       endif /* __STL_USE_EXCEPTIONS */
+}
+```
+
 
 
 #### 4.3.5 deque的删除操作
 
 ##### 4.3.5.1 前/后删除
+
+前后删除的原理比较简单，它首先会检查当前欲删除元素是否位于缓冲区的边缘位置，若是删除后可能会对前面或者后面不再使用的缓冲区进行销毁；否则就仅仅析构后更新下相关的迭代器。
 
 ```c++
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
@@ -578,7 +626,7 @@ void deque<_Tp,_Alloc>::_M_pop_front_aux()
 
 ##### 4.3.5.3 任意删除
 
-
+由于即使deque为空，它也会要求容器中存在一个缓冲区作为备用。所以`clear()`操作执行时先对第2个~第n-1个缓冲区执行析构所有元素+销毁缓冲区的操作，然后特别的处理第1个和最后一个缓冲区，保证处理完毕后留下第一个缓冲区（之所以这样是因为最后一个缓冲区可能和第一个是同一个，或者最后一个缓冲区中的元素不全有效）。
 
 ```c++
 template <class _Tp, class _Alloc> 
@@ -604,7 +652,9 @@ void deque<_Tp,_Alloc>::clear()
 }
 ```
 
-`erase()`操作的实现
+
+
+`erase()`操作也有单元素删除和范围元素删除两种，且第一个操作需要针对①刚好前端删除；②刚好后端删除和③在内部删除这3种情况进行处理，而第二个操作则需要针对删除位置是否靠前还是靠后两种情况机型考虑，还是比较简单的。
 
 ```c++
 public:                         // Erase
