@@ -108,11 +108,13 @@ struct _Rb_tree_base_iterator
 
   void _M_increment()
   {
+    //若存在右孩子，则步向右子节点
     if (_M_node->_M_right != 0) {
       _M_node = _M_node->_M_right;
       while (_M_node->_M_left != 0)
         _M_node = _M_node->_M_left;
     }
+    //若不存在右孩子，则沿路向上
     else {
       _Base_ptr __y = _M_node->_M_parent;
       while (_M_node == __y->_M_right) {
