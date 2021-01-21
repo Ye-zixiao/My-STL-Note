@@ -44,11 +44,12 @@ __push_heap(_RandomAccessIterator __first,
             _Distance __holeIndex, _Distance __topIndex, _Tp __value)
 {
   _Distance __parent = (__holeIndex - 1) / 2;
+  //父节点、祖先节点先下沉，为插入元素预留一个空位
   while (__holeIndex > __topIndex && *(__first + __parent) < __value) {
     *(__first + __holeIndex) = *(__first + __parent);
     __holeIndex = __parent;
     __parent = (__holeIndex - 1) / 2;
-  }    
+  }
   *(__first + __holeIndex) = __value;
 }
 

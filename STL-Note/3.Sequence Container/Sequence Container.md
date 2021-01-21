@@ -1497,3 +1497,291 @@ deque<_Tp,_Alloc>::erase(iterator __first, iterator __last)
 
 
 
+### 4.4 容器适配器
+
+#### 4.4.1 stack
+
+stack的本质就是借别的顺序容器（默认情况下是deque）造个壳罢了。实现源文件[stl_stack.h](stl_stack.h)。
+
+
+
+#### 4.4.2 queue
+
+queue先进后出队列的实现也非常简单，就是借一个顺序容器（默认是deque，但不支持vector，因为它本身就不支持前向出入的操作）再造一个壳。实现源文件[stl_queue.h](stl_queue.h)。
+
+
+
+#### 4.4.3 ==二叉堆heap==
+
+在STL中，二叉堆并不是以容器的形式存在，而是属于算法的范畴，它是后面优先队列实现的前提。为了理解STL中的二叉堆算法实现，我们首先需要了解STL中的常用二叉堆算法的功能和作用：
+
+1. `make_heap()`函数的作用就是将指定范围内的容器元素构建成二叉堆（默认是最大堆）；
+2. `push_heap()`函数的作用就是将一个元素加入到二叉堆之中。不过从元素内容的角度来看，它实际上并没有push添加新的元素，新的元素是之前用户自己调用`push_back()`添加到二叉堆的尾部而成的；
+3. `pop_heap()`函数的作用就是从二叉堆中移除堆顶元素，然后重新组织二叉堆。它与`push_heap()`函数一样并没有删除容器中的元素，只不过将最大值元素放到了容器最后的位置，然后缩减二叉堆范围罢了；
+4. `sort_heap()`函数的作用就是将一个二叉堆中的元素以默认升序的方式对容器进行排列。
+
+> `push_heap()`和`pop_heap()`函数其实很好的遵守了“算法不对容器进行增删操作”的原则。至于其他二叉堆算法和具体细节可以访问https://zh.cppreference.com/w/cpp/algorithm了解。
+
+
+
+##### 4.4.3.1 二叉堆的插入
+
+`push_heap()`算法能够正常执行的前提是容器[\_\_first,\_\_holeIndex-1)范围内的元素已经形成二叉堆，那么将这个__holeIndex-1位置上的元素存放到容器这片范围指定位置的操作就相应的变成了二叉堆插入操作。将容器元素交换到容器的某一个位置的操作就是《*算法4*》指出的上浮`swim()`操作。
+
+在SGI STL中，上浮操作实际上是由一个名为`__push_heap()`的操作完成的，而最后元素的上浮却需要先让它的父节点、祖先节点进行下沉，从而为它在二叉堆中预留出一个空的位置。为此，它首先会将二叉堆后面第一个元素交给一个名为__value的临时变量进行存储，然后依次与它原来完全二叉树的父节点、祖先节点进行比较，让父节点、祖先节点根据大小比较结果进行下沉，当比较不再符合或者走到了容器的头部之后才停下，然后再将\_\_value值赋给这个空位，从而完成上浮swim操作。具体如下图所示：
+
+<img src="../../image/push_heap.jpg" alt="push_heap" style="zoom:50%;" />
+
+```c++
+//执行真正的元素“插入”工作，本质就是算法4讲的上浮swim操作
+template <class _RandomAccessIterator, class _Distance, class _Tp>
+void 
+__push_heap(_RandomAccessIterator __first,
+            _Distance __holeIndex, _Distance __topIndex, _Tp __value)
+{
+  _Distance __parent = (__holeIndex - 1) / 2;
+  //父节点、祖先节点先下沉，为插入元素预留一个空位
+  while (__holeIndex > __topIndex && *(__first + __parent) < __value) {
+    *(__first + __holeIndex) = *(__first + __parent);
+    __holeIndex = __parent;
+    __parent = (__holeIndex - 1) / 2;
+  }    
+  *(__first + __holeIndex) = __value;
+}
+
+template <class _RandomAccessIterator, class _Distance, class _Tp>
+inline void 
+__push_heap_aux(_RandomAccessIterator __first,
+                _RandomAccessIterator __last, _Distance*, _Tp*)
+{
+  __push_heap(__first, _Distance((__last - __first) - 1), _Distance(0), 
+              _Tp(*(__last - 1)));
+}
+
+template <class _RandomAccessIterator>
+inline void 
+push_heap(_RandomAccessIterator __first, _RandomAccessIterator __last)
+{
+  __STL_REQUIRES(_RandomAccessIterator, _Mutable_RandomAccessIterator);
+  __STL_REQUIRES(typename iterator_traits<_RandomAccessIterator>::value_type,
+                 _LessThanComparable);
+  __push_heap_aux(__first, __last,
+                  __DISTANCE_TYPE(__first), __VALUE_TYPE(__first));
+    //__VALUE_TYPE()、__DISTANCE_TYPE()方便辅助函数获知迭代器相关类型并以此模板参数推断
+}
+```
+
+
+
+##### 4.4.3.2 二叉堆的删除
+
+我们知道算法作用于迭代器之上，而增删元素可能会造成迭代器的失效，所以算法绝对不会对自己所作用的容器执行增删操作，故这里的`pop_heap()`算法并不会真的删除最大值元素，而是将它放到指定范围容器的最后一个位置。
+
+我们知道，在《*算法４*》或者传统的数据结构、算法书籍中，二叉堆堆顶元素删除操作一般是借助二叉堆最后元素与堆顶元素交换之后让这个临时堆顶元素进行下沉而实现的。但在SGI STL的二叉堆算法实现中，并不与之相同。就如我们前面看到的那样，二叉堆的插入操作也并非完全像《*算法4*》描述的那样，它们都不是通过交换swap技术来实现的🧐！
+
+在SGI STL中二叉堆的删除操作主要是由一个名为`__adjust_heap()`和`__pop_heap()`的辅助函数来完成的，它会按照如下的流程进行执行：
+
+1. 它首先会将原二叉堆最后一个元素存储到一个名为__value的临时变量中，然后二叉堆堆顶元素赋给二叉堆的最后一个元素，然后缩减二叉堆的长度，这样就形成了元素被删除的假象。
+2. 接着，二叉堆删除算法就会依次向下选取原堆顶元素较大的子节点、后代节点上浮，以填充栈顶元素删除后形成的空洞，这样的后果就是二叉堆中会有一个叶子节点变成空洞。
+3. 完成上述操作后，删除算法就会调用`__push_heap()`函数重新在空洞的位置插入原二叉堆的最后一个元素（这会导致二叉堆又出现元素下沉的操作）。具体如下图所示：
+
+<img src="../../image/pop_heap.jpg" alt="pop_heap" style="zoom:50%;" />
+
+为了加深理解，我们来对比下传统的二叉堆实现（以《*算法4*》为代表）与SGI STL二叉堆的实现，我们可以发现相对于《*算法4*》的实现，SGI STL的二叉堆插入实现相对更为简单，但是元素的删除操作却变得更为复杂。当然它之所以如此设计，我认为一个很大的原因就是为了尽可能减少交换操作所带来的大量元素存取操作。
+
+|   操作   |                      《*算法4*》的实现                       |                        SGI STL的实现                         |
+| :------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
+| `push()` | 通过交换技术将**最后元素上浮+其原节点的父节点、祖先节点下沉**实现之 | **还是依靠最后元素的上浮+其原节点的父节点、祖先节点下沉实现**的，只不过不再同时进行。而是先下沉预留空位，然后直接赋值以实现间接上浮 |
+| `pop()`  | 通过最后元素赋给堆顶，然后通过交换技术让**堆顶节点下沉+堆顶节点的子节点、后代节点上浮**实现 | 通过临时变量存储最后元素，然后**先让原堆顶元素的子节点、后代节点上浮**在某一个叶子节点预留空位，**然后调用`push_heap()`重新插入元最后元素，此时又出现了父节点、祖先节点的下沉**，然后再赋值。因此SGI STL对二叉堆元素删除的实现比较复杂 |
+
+```c++
+template <class _RandomAccessIterator, class _Distance, class _Tp>
+void 
+__adjust_heap(_RandomAccessIterator __first, _Distance __holeIndex,
+              _Distance __len, _Tp __value)
+              /* hostIndex指的是当前空洞元素的位置 */
+{
+  _Distance __topIndex = __holeIndex;
+  _Distance __secondChild = 2 * __holeIndex + 2;
+  //先让原堆顶节点的子节点、后代节点上浮
+  while (__secondChild < __len) {
+    //若左边的兄弟结点值比当前预判的孩子结点大，那么更新下标
+    if (*(__first + __secondChild) < *(__first + (__secondChild - 1)))
+      __secondChild--;
+    *(__first + __holeIndex) = *(__first + __secondChild);
+    __holeIndex = __secondChild;
+    __secondChild = 2 * (__secondChild + 1);
+  }
+  //若退出循环后只有左孩子，那么就让空洞元素和左孩子交换
+  if (__secondChild == __len) {
+    *(__first + __holeIndex) = *(__first + (__secondChild - 1));
+    __holeIndex = __secondChild - 1;
+  }
+  
+  //在空洞位置为原来二叉堆的最后一个元素进行重新插入
+  __push_heap(__first, __holeIndex, __topIndex, __value);
+}
+
+template <class _RandomAccessIterator, class _Tp, class _Distance>
+inline void 
+__pop_heap(_RandomAccessIterator __first, _RandomAccessIterator __last,
+           _RandomAccessIterator __result, _Tp __value, _Distance*)
+{
+  //并没有删除最大值元素，仅仅将它放到容器（指定范围内）的最后位
+  //且最后一个元素也已经被记录，就是实参__value
+  *__result = *__first;
+  __adjust_heap(__first, _Distance(0), _Distance(__last - __first), __value);
+                      //这里传入的长度不是last-first+1！，所以二叉堆的长度被缩短了
+}
+
+template <class _RandomAccessIterator, class _Tp>
+inline void 
+__pop_heap_aux(_RandomAccessIterator __first, _RandomAccessIterator __last,
+               _Tp*)
+{
+  __pop_heap(__first, __last - 1, __last - 1, 
+             _Tp(*(__last - 1)), __DISTANCE_TYPE(__first));
+             //这里的__DISTANCE_TYPE仅仅是为了模板实参推断
+}
+
+template <class _RandomAccessIterator>
+inline void pop_heap(_RandomAccessIterator __first, 
+                     _RandomAccessIterator __last)
+{
+  __STL_REQUIRES(_RandomAccessIterator, _Mutable_RandomAccessIterator);
+  __STL_REQUIRES(typename iterator_traits<_RandomAccessIterator>::value_type,
+                 _LessThanComparable);
+  __pop_heap_aux(__first, __last, __VALUE_TYPE(__first));
+}
+```
+
+
+
+##### 4.4.3.3 堆排序
+
+由于`pop_heap()`算法并没有真正的删除堆顶元素，而是将其存放到二叉堆的尾后，然后缩小二叉堆长度。因此我们可以想象如果我们一直对一个最大堆调用`pop_heap()`函数，那么最后当二叉堆变成空时，存储元素的容器一定以升序状态排列。而`sort_heap()`的原理正是如此。
+
+```c++
+template <class _RandomAccessIterator>
+void sort_heap(_RandomAccessIterator __first, _RandomAccessIterator __last)
+{
+  __STL_REQUIRES(_RandomAccessIterator, _Mutable_RandomAccessIterator);
+  __STL_REQUIRES(typename iterator_traits<_RandomAccessIterator>::value_type,
+                 _LessThanComparable);
+  while (__last - __first > 1)
+    pop_heap(__first, __last--);
+}
+```
+
+
+
+##### 4.4.3.4 建堆操作
+
+对于一个支持随机访问迭代器的容器执行建堆操作的原理就是从最后一个非叶子节点（下标：$((len-1)-1)/{2}$）开始到堆顶节点依次递减执行下沉操作，而这里所谓的下沉操作实际上就是由上面的`__adjust_heap()`辅助函数来完成，而我们也知道这以下沉操作并非是传统算法4观念中的下沉！但为了保持思维惯性我们依然如此称呼。
+
+```c++
+template <class _RandomAccessIterator, class _Tp, class _Distance>
+void 
+__make_heap(_RandomAccessIterator __first,
+            _RandomAccessIterator __last, _Tp*, _Distance*)
+{
+  if (__last - __first < 2) return;
+  _Distance __len = __last - __first;
+  _Distance __parent = (__len - 2)/2;
+    
+  /* 从最后一个非叶子节点开始到根节点逐一执行下沉sink操作（算法4叫这名字，
+    不过这里SGI STL叫adjust_heap，无所谓🙃） */
+  while (true) {
+    __adjust_heap(__first, __parent, __len, _Tp(*(__first + __parent)));
+    if (__parent == 0) return;
+    __parent--;
+  }
+}
+
+template <class _RandomAccessIterator>
+inline void 
+make_heap(_RandomAccessIterator __first, _RandomAccessIterator __last)
+{
+  __STL_REQUIRES(_RandomAccessIterator, _Mutable_RandomAccessIterator);
+  __STL_REQUIRES(typename iterator_traits<_RandomAccessIterator>::value_type,
+                 _LessThanComparable);
+  __make_heap(__first, __last,
+              __VALUE_TYPE(__first), __DISTANCE_TYPE(__first));
+}
+```
+
+
+
+#### 4.4.4 priority_queue
+
+默认情况下，priority_queue = vector + heap算法，其实也是套壳实现的，只不过看起来套的比较有技术含量罢了🤣。
+
+````c++
+template <class _Tp, 
+          class _Sequence __STL_DEPENDENT_DEFAULT_TMPL(vector<_Tp>),
+          class _Compare
+          __STL_DEPENDENT_DEFAULT_TMPL(less<typename _Sequence::value_type>) >
+class priority_queue {
+
+  // requirements:
+
+  __STL_CLASS_REQUIRES(_Tp, _Assignable);
+  __STL_CLASS_REQUIRES(_Sequence, _Sequence);
+  __STL_CLASS_REQUIRES(_Sequence, _RandomAccessContainer);
+  typedef typename _Sequence::value_type _Sequence_value_type;
+  __STL_CLASS_REQUIRES_SAME_TYPE(_Tp, _Sequence_value_type);
+  __STL_CLASS_BINARY_FUNCTION_CHECK(_Compare, bool, _Tp, _Tp);
+
+public:
+  typedef typename _Sequence::value_type      value_type;
+  typedef typename _Sequence::size_type       size_type;
+  typedef          _Sequence                  container_type;
+
+  typedef typename _Sequence::reference       reference;
+  typedef typename _Sequence::const_reference const_reference;
+protected:
+  _Sequence c;//内部容器
+  _Compare comp;//比较器
+public:
+  priority_queue() : c() {}
+  explicit priority_queue(const _Compare& __x) :  c(), comp(__x) {}
+    
+  template <class _InputIterator>
+  priority_queue(_InputIterator __first, _InputIterator __last) 
+    : c(__first, __last) { make_heap(c.begin(), c.end(), comp); }
+
+  template <class _InputIterator>
+  priority_queue(_InputIterator __first, 
+                 _InputIterator __last, const _Compare& __x)
+    : c(__first, __last), comp(__x) 
+    { make_heap(c.begin(), c.end(), comp); }
+
+  template <class _InputIterator>
+  priority_queue(_InputIterator __first, _InputIterator __last,
+                 const _Compare& __x, const _Sequence& __s)
+  : c(__s), comp(__x)
+  { 
+    c.insert(c.end(), __first, __last);
+    make_heap(c.begin(), c.end(), comp);
+  }
+    
+  bool empty() const { return c.empty(); }
+  size_type size() const { return c.size(); }
+  const_reference top() const { return c.front(); }
+  void push(const value_type& __x) {
+    __STL_TRY {
+      c.push_back(__x); 
+      push_heap(c.begin(), c.end(), comp);
+    }
+    __STL_UNWIND(c.clear());
+  }
+  void pop() {
+    __STL_TRY {
+      pop_heap(c.begin(), c.end(), comp);
+      c.pop_back();
+    }
+    __STL_UNWIND(c.clear());
+  }
+};
+````
+
