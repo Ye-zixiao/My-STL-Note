@@ -1714,7 +1714,7 @@ make_heap(_RandomAccessIterator __first, _RandomAccessIterator __last)
 
 #### 4.4.4 priority_queue
 
-默认情况下，priority_queue = vector + heap算法，其实也是套壳实现的，只不过看起来套的比较有技术含量罢了🤣。
+默认情况下，priority_queue = vector + heap算法，其实也是套壳实现的。
 
 ````c++
 template <class _Tp, 
