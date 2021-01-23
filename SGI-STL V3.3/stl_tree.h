@@ -258,14 +258,17 @@ _Rb_tree_rebalance(_Rb_tree_node_base* __x, _Rb_tree_node_base*& __root)
 {
   __x->_M_color = _S_rb_tree_red;
   while (__x != __root && __x->_M_parent->_M_color == _S_rb_tree_red) {
+    /* 插入结点的父结点是祖父结点的左孩子 */
     if (__x->_M_parent == __x->_M_parent->_M_parent->_M_left) {
       _Rb_tree_node_base* __y = __x->_M_parent->_M_parent->_M_right;
+      //处理4-结点左侧插入这种破坏平衡的情况
       if (__y && __y->_M_color == _S_rb_tree_red) {
         __x->_M_parent->_M_color = _S_rb_tree_black;
         __y->_M_color = _S_rb_tree_black;
         __x->_M_parent->_M_parent->_M_color = _S_rb_tree_red;
         __x = __x->_M_parent->_M_parent;
       }
+      //处理左倾3-结点插入这种破坏平衡的情况
       else {
         if (__x == __x->_M_parent->_M_right) {
           __x = __x->_M_parent;
@@ -276,14 +279,17 @@ _Rb_tree_rebalance(_Rb_tree_node_base* __x, _Rb_tree_node_base*& __root)
         _Rb_tree_rotate_right(__x->_M_parent->_M_parent, __root);
       }
     }
+    /* 插入结点的父结点时祖父结点的右孩子 */
     else {
       _Rb_tree_node_base* __y = __x->_M_parent->_M_parent->_M_left;
+      //处理4-结点右侧插入这种破坏平衡的情况
       if (__y && __y->_M_color == _S_rb_tree_red) {
         __x->_M_parent->_M_color = _S_rb_tree_black;
         __y->_M_color = _S_rb_tree_black;
         __x->_M_parent->_M_parent->_M_color = _S_rb_tree_red;
         __x = __x->_M_parent->_M_parent;
       }
+      //处理右倾3-结点插入这种破坏平衡的情况
       else {
         if (__x == __x->_M_parent->_M_left) {
           __x = __x->_M_parent;
@@ -307,6 +313,8 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
   _Rb_tree_node_base* __y = __z;
   _Rb_tree_node_base* __x = 0;
   _Rb_tree_node_base* __x_parent = 0;
+  /* 找一个待删结点的替代结点，用__x记录。若__z无子或者独子，
+    则__y必然就是自己，否则就是右子树中的最小结点 */
   if (__y->_M_left == 0)     // __z has at most one non-null child. y == z.
     __x = __y->_M_right;     // __x might be null.
   else
@@ -365,6 +373,7 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
         __rightmost = _Rb_tree_node_base::_S_maximum(__x);
   }
   if (__y->_M_color != _S_rb_tree_red) { 
+    //若删除的结点不是红节点，那么就得从祖先结点（3-结点或者4-结点中提取出一个结点以下移）
     while (__x != __root && (__x == 0 || __x->_M_color == _S_rb_tree_black))
       if (__x == __x_parent->_M_left) {
         _Rb_tree_node_base* __w = __x_parent->_M_right;
@@ -739,7 +748,7 @@ public:
       _M_rightmost() = _M_header;
       _M_node_count = 0;
     }
-  }      
+  }
 
 public:
                                 // set operations:
@@ -861,6 +870,7 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
   _Link_type __y = (_Link_type) __y_;
   _Link_type __z;
 
+  //左边插入
   if (__y == _M_header || __x != 0 || 
       _M_key_compare(_KeyOfValue()(__v), _S_key(__y))) {
     __z = _M_create_node(__v);
@@ -873,6 +883,7 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
     else if (__y == _M_leftmost())
       _M_leftmost() = __z;   // maintain _M_leftmost() pointing to min node
   }
+  //右边插入
   else {
     __z = _M_create_node(__v);
     _S_right(__y) = __z;
@@ -882,6 +893,7 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
   _S_parent(__z) = __y;
   _S_left(__z) = 0;
   _S_right(__z) = 0;
+  //维持红黑树平衡
   _Rb_tree_rebalance(__z, _M_header->_M_parent);
   ++_M_node_count;
   return iterator(__z);
@@ -897,6 +909,7 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
   _Link_type __x = _M_root();
   while (__x != 0) {
     __y = __x;
+    //_KeyofValue()会提取出__v的键值，而_S_key()也会默认提取出__x的键值
     __x = _M_key_compare(_KeyOfValue()(__v), _S_key(__x)) ? 
             _S_left(__x) : _S_right(__x);
   }
@@ -1074,8 +1087,10 @@ template <class _Key, class _Value, class _KeyOfValue,
 typename _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>::size_type 
 _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>::erase(const _Key& __x)
 {
+  //获得指定键值结点在红黑树中的上边沿和下边沿
   pair<iterator,iterator> __p = equal_range(__x);
   size_type __n = 0;
+  //获得待删除结点的个数
   distance(__p.first, __p.second, __n);
   erase(__p.first, __p.second);
   return __n;
@@ -1091,17 +1106,21 @@ _Rb_tree<_Key,_Val,_KoV,_Compare,_Alloc>
   __top->_M_parent = __p;
  
   __STL_TRY {
+    //递归构建右子树
     if (__x->_M_right)
       __top->_M_right = _M_copy(_S_right(__x), __top);
     __p = __top;
     __x = _S_left(__x);
 
+    //若左子树存在
     while (__x != 0) {
       _Link_type __y = _M_clone_node(__x);
       __p->_M_left = __y;
       __y->_M_parent = __p;
+      //递归构建当前结点的右子树
       if (__x->_M_right)
         __y->_M_right = _M_copy(_S_right(__x), __y);
+      //然后继续向左走
       __p = __y;
       __x = _S_left(__x);
     }
@@ -1156,6 +1175,7 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>::find(const _Key& __k)
     if (!_M_key_compare(_S_key(__x), __k))
       __y = __x, __x = _S_left(__x);
     else
+    /* 这里不更新y是为了判定出__y左孩子的右子树任意节点<__k<__y的出界情况 */
       __x = _S_right(__x);
 
   iterator __j = iterator(__y);   
