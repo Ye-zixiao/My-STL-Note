@@ -369,7 +369,7 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
 
 
 
-##### 5.2.4.4 红黑树再平衡
+##### 5.2.4.4 插入节点树形再平衡
 
 当一个新结点插入到红黑树之后可能并没有满足红黑树的平衡规范，因此它必须在插入完成之后调用下面名为`_Rb_tree_rebalance()`的函数以实现红黑树的再平衡。如我们所见该函数主要将我们在上面红黑树理论小节中描述的8种情况分成如下两大类进行处理：
 
@@ -433,7 +433,225 @@ _Rb_tree_rebalance(_Rb_tree_node_base* __x, _Rb_tree_node_base*& __root)
 
 
 
-#### 5.2.5 _Rb_tree元素删除操作
+#### 5.2.5 ==_Rb_tree元素删除操作==
+
+##### 5.2.5.1 元素删除操作的外包装
+
+```c++
+template <class _Key, class _Value, class _KeyOfValue, 
+          class _Compare, class _Alloc>
+typename _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>::size_type 
+_Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>::erase(const _Key& __x)
+{
+  //获得指定键值结点在红黑树中的上边沿和下边沿
+  pair<iterator,iterator> __p = equal_range(__x);
+  size_type __n = 0;
+  //获得待删除结点的个数
+  distance(__p.first, __p.second, __n);
+  erase(__p.first, __p.second);
+  return __n;
+}
+
+template <class _Key, class _Value, class _KeyOfValue, 
+          class _Compare, class _Alloc>
+void _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
+  ::erase(iterator __first, iterator __last)
+{
+  if (__first == begin() && __last == end())
+    clear();
+  else
+    while (__first != __last) erase(__first++);
+}
+
+template <class _Key, class _Value, class _KeyOfValue, 
+          class _Compare, class _Alloc>
+inline void _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
+  ::erase(iterator __position)
+{
+  _Link_type __y = 
+    (_Link_type) _Rb_tree_rebalance_for_erase(__position._M_node,
+                                              _M_header->_M_parent,
+                                              _M_header->_M_left,
+                                              _M_header->_M_right);
+  destroy_node(__y);
+  --_M_node_count;
+}
+```
+
+
+
+##### 5.2.5.2 待删节点树形再平衡
+
+红黑树在删除一个指定的结点前会首先调用一个名为`_Rb_tree_rebalance_for_erase()`的树形调整函数，它从红黑树中取出该结点然后针对结点缺失后造成的空缺进行树形调整操作，使得删除该结点后的红黑树仍然符合红黑树的平衡规范。
+
+| 待删节点情况 |                           删除方式                           |
+| :----------: | :----------------------------------------------------------: |
+|     无子     | 若待删节点红（3-节点或者4-节点），则无需处理；若黑（2-节点），则需要特殊的树形调整处理 |
+|     独子     | 待删节点只能为黑，且子节点必为红，此时只需要将子节点变黑然后挂接到待删节点的父节点下 |
+|     双子     | 需要在待删节点的右子树上找一个替代节点来替代待删节点，而替代节点必然是一个无子或独子节点，这样此时对待删节点树形调整问题就转化成了对替代节点的树形调整问题 |
+
+| 待删节点情况 |                           删除方式                           |
+| :----------: | :----------------------------------------------------------: |
+|     无子     | 若待删节点红（3或4-节点），则无需处理；若黑（2-节点），则需要特殊的树形调整处理 |
+|     独子     | 待删节点只能为黑，且子节点必为红，此时只需将子节点变黑然后重新挂接 |
+|     双子     | 在待删节点的右子树找一个替代节点，间接转换为对替代节点的树形调整问题 |
+
+上面描述的待删节点的各种情况中，最复杂的就是待删节点无子且为黑的情况，从处理的角度上主要分成两种处理类型：①一种是待删节点是其父节点的左子节点；②另一种情况是待删节点是其父节点右子节点。但两种其实对比度比较高，理解其中一种就可以很好的理解另一种情况。上述两大类每类都有9种情况，且9种情况之间存在相互转换的关系，而SGI STL对待删节点的树形再平衡处理正是利用了这些转换关系，从而降低处理的复杂程度（但实际上还是很复杂😂！下面将近150行的代码已经说明了这一切！）。这18种情形如下所示：
+
+<img src="../../image/红黑树删除的18种情况.jpg" alt="红黑树删除的18种情况" style="zoom: 50%;" />
+
+上述演示图不仅展示了删除结点时造成红黑树平衡破坏的18种情况，还展示了SGI STL中树形再平衡函数针对待删节点为其父节点的左子节点的大致处理流程，也即源代码[stl_tree.h](stl_tree.h)385~415行的代码部分。
+
+```c++
+inline _Rb_tree_node_base*
+_Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
+                             _Rb_tree_node_base*& __root,
+                             _Rb_tree_node_base*& __leftmost,
+                             _Rb_tree_node_base*& __rightmost)
+{
+  _Rb_tree_node_base* __y = __z;
+  _Rb_tree_node_base* __x = 0;
+  _Rb_tree_node_base* __x_parent = 0;
+  /* 1、当待删节点无子或独子时，__y记录待删节点，__x记录它的左子节点（有可能为null）或者右子节点；
+     2、当待删节点存在双子时，__y记录右子树中的最小节点，__x记录右子树最小节点的右子节点 */
+  if (__y->_M_left == 0)     // __z has at most one non-null child. y == z.
+    __x = __y->_M_right;     // __x might be null.
+  else
+    if (__y->_M_right == 0)  // __z has exactly one non-null child. y == z.
+      __x = __y->_M_left;    // __x is not null.
+    else {                   // __z has two non-null children.  Set __y to
+      __y = __y->_M_right;   //   __z's successor.  __x might be null.
+      while (__y->_M_left != 0)
+        __y = __y->_M_left;
+      __x = __y->_M_right;
+    }
+  //待删节点存在双子
+  if (__y != __z) {          // relink y in place of z.  y is z's successor
+    __z->_M_left->_M_parent = __y; 
+    __y->_M_left = __z->_M_left;
+    if (__y != __z->_M_right) {
+      __x_parent = __y->_M_parent;
+      if (__x) __x->_M_parent = __y->_M_parent;
+      __y->_M_parent->_M_left = __x;      // __y must be a child of _M_left
+      __y->_M_right = __z->_M_right;
+      __z->_M_right->_M_parent = __y;
+    }
+    else
+      __x_parent = __y;  
+    if (__root == __z)
+      __root = __y;
+    else if (__z->_M_parent->_M_left == __z)
+      __z->_M_parent->_M_left = __y;
+    else 
+      __z->_M_parent->_M_right = __y;
+    __y->_M_parent = __z->_M_parent;
+    
+    __STD::swap(__y->_M_color, __z->_M_color);
+    __y = __z;
+    // __y now points to node to be actually deleted
+  }
+  //待删节点独子或者无子
+  else {                        // __y == __z
+    //重新认亲
+    __x_parent = __y->_M_parent;
+    if (__x) __x->_M_parent = __y->_M_parent;   
+    if (__root == __z)
+      __root = __x;
+    else 
+      if (__z->_M_parent->_M_left == __z)
+        __z->_M_parent->_M_left = __x;
+      else
+        __z->_M_parent->_M_right = __x;
+
+    //若删除的是最小键值结点或者最大键值结点
+    if (__leftmost == __z) 
+      if (__z->_M_right == 0)        // __z->_M_left must be null also
+        __leftmost = __z->_M_parent;
+    // makes __leftmost == _M_header if __z == __root
+      else
+        __leftmost = _Rb_tree_node_base::_S_minimum(__x);
+    if (__rightmost == __z)  
+      if (__z->_M_left == 0)         // __z->_M_right must be null also
+        __rightmost = __z->_M_parent;  
+    // makes __rightmost == _M_header if __z == __root
+      else                      // __x == __z->_M_left
+        __rightmost = _Rb_tree_node_base::_S_maximum(__x);
+  }
+  
+  if (__y->_M_color != _S_rb_tree_red) { 
+    //若删除的结点不是红节点，那么就得从祖先结点（3-结点或者4-结点中提取出一个结点以下移）
+    while (__x != __root && (__x == 0 || __x->_M_color == _S_rb_tree_black))
+      //待删节点是其父节点的左节点
+      if (__x == __x_parent->_M_left) {
+        _Rb_tree_node_base* __w = __x_parent->_M_right;
+        //判断兄弟节点是否为红色，这种情况只有一种
+        if (__w->_M_color == _S_rb_tree_red) {
+          __w->_M_color = _S_rb_tree_black;
+          __x_parent->_M_color = _S_rb_tree_red;
+          _Rb_tree_rotate_left(__x_parent, __root);
+          __w = __x_parent->_M_right;
+        }
+        //判断兄弟节点的子节点是否全黑
+        if ((__w->_M_left == 0 || 
+             __w->_M_left->_M_color == _S_rb_tree_black) &&
+            (__w->_M_right == 0 || 
+             __w->_M_right->_M_color == _S_rb_tree_black)) {
+          __w->_M_color = _S_rb_tree_red;
+          __x = __x_parent;
+          __x_parent = __x_parent->_M_parent;
+        } else {
+          if (__w->_M_right == 0 || 
+              __w->_M_right->_M_color == _S_rb_tree_black) {
+            if (__w->_M_left) __w->_M_left->_M_color = _S_rb_tree_black;
+            __w->_M_color = _S_rb_tree_red;
+            _Rb_tree_rotate_right(__w, __root);
+            __w = __x_parent->_M_right;
+          }
+          __w->_M_color = __x_parent->_M_color;
+          __x_parent->_M_color = _S_rb_tree_black;
+          if (__w->_M_right) __w->_M_right->_M_color = _S_rb_tree_black;
+          _Rb_tree_rotate_left(__x_parent, __root);
+          break;
+        }
+      } else {                  // same as above, with _M_right <-> _M_left.
+        _Rb_tree_node_base* __w = __x_parent->_M_left;
+        if (__w->_M_color == _S_rb_tree_red) {
+          __w->_M_color = _S_rb_tree_black;
+          __x_parent->_M_color = _S_rb_tree_red;
+          _Rb_tree_rotate_right(__x_parent, __root);
+          __w = __x_parent->_M_left;
+        }
+        if ((__w->_M_right == 0 || 
+             __w->_M_right->_M_color == _S_rb_tree_black) &&
+            (__w->_M_left == 0 || 
+             __w->_M_left->_M_color == _S_rb_tree_black)) {
+          __w->_M_color = _S_rb_tree_red;
+          __x = __x_parent;
+          __x_parent = __x_parent->_M_parent;
+        } else {
+          if (__w->_M_left == 0 || 
+              __w->_M_left->_M_color == _S_rb_tree_black) {
+            if (__w->_M_right) __w->_M_right->_M_color = _S_rb_tree_black;
+            __w->_M_color = _S_rb_tree_red;
+            _Rb_tree_rotate_left(__w, __root);
+            __w = __x_parent->_M_left;
+          }
+          __w->_M_color = __x_parent->_M_color;
+          __x_parent->_M_color = _S_rb_tree_black;
+          if (__w->_M_left) __w->_M_left->_M_color = _S_rb_tree_black;
+          _Rb_tree_rotate_right(__x_parent, __root);
+          break;
+        }
+      }
+    if (__x) __x->_M_color = _S_rb_tree_black;
+  }
+  return __y;
+}
+```
+
+
+
+> 参考文档：[彻底理解红黑树（三）之删除](https://www.jianshu.com/p/84416644c080)
 
 
 
@@ -463,5 +681,63 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>::find(const _Key& __k)
 
 
 
-### 5.3 由_Rb_tree衍生的关联容器
+### 5.3 由_Rb_tree衍生的有序关联容器
+
+#### 5.3.1 set
+
+
+
+#### 5.3.2 map
+
+```c++
+template <class _Key, class _Tp, class _Compare, class _Alloc>
+class map {
+public:
+  typedef _Key                  key_type;
+  typedef _Tp                   data_type;
+  typedef _Tp                   mapped_type;
+  typedef pair<const _Key, _Tp> value_type;
+  typedef _Compare              key_compare;
+
+  //嵌套类
+  class value_compare
+    : public binary_function<value_type, value_type, bool> {
+  friend class map<_Key,_Tp,_Compare,_Alloc>;
+  protected :
+    _Compare comp;
+    value_compare(_Compare __c) : comp(__c) {}
+  public:
+    bool operator()(const value_type& __x, const value_type& __y) const {
+      return comp(__x.first, __y.first);
+    }
+  };
+  /* ... */
+private:
+  typedef _Rb_tree<key_type, value_type, 
+                   _Select1st<value_type>, key_compare, _Alloc> _Rep_type;
+  _Rep_type _M_t;  // red-black tree representing map
+  /* ... */
+  _Tp& operator[](const key_type& __k) {
+    iterator __i = lower_bound(__k);
+    // __i->first is greater than or equivalent to __k.
+    /* 不再像书中的STL实现版本那样直接插入，而是先查找下是否存在
+    	，只有不存在的时候才执行插入操作 */
+    if (__i == end() || key_comp()(__k, (*__i).first))
+      __i = insert(__i, value_type(__k, _Tp()));
+    return (*__i).second;
+  }
+};
+```
+
+
+
+#### 5.3.3 multimap
+
+
+
+#### 5.3.4 multiset
+
+
+
+### 5.4 哈希表
 
