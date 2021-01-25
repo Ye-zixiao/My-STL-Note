@@ -1785,3 +1785,375 @@ public:
 };
 ````
 
+
+
+### 4.5 slist
+
+slist也即是当前C++ STL中单链表forward_list的前辈，在C++11之前作为forward_list的替代者。其实现文件位于源文件[stl_slist.h](stl_slist.h)，其中如下几个是我们需要关注的部分：
+
+1. slist的数据结构、结点、迭代器；
+2. 构造、析构过程；
+3. 插入`insert()`和删除`erase()`操作；
+4. **拼接splice操作极其衍生操作**；
+5. 其他操作看看就好。
+
+> 至于slist支持哪些操作其实在现如今的C++ STL中已经不重要了，若是真想，则了解forward_list更有意义：https://zh.cppreference.com/w/cpp/container/forward_list。
+
+
+
+#### 4.5.1 slist的结点和迭代器
+
+slist的结点以及迭代器实现思路和继承结构基本上和list的实现很类似：结点类`_Slist_node`会继承一个结点基类`_Slist_node_base`；而迭代器`_Slist_iterator`会继承一个迭代器基类`_Slist_iterator_base`，其中基类中的指针成员负责指向结点基类而不是直接指向结点类。其大致结构如下所示：
+
+<img src="../../image/slistnode.jpg" alt="slistnode" style="zoom:50%;" />
+
+结点和迭代器的代码实现如下，大致在源文件的第31行、第112行、第117行和第137行起的位置：
+
+```c++
+//slist结点：
+struct _Slist_node_base
+{
+  _Slist_node_base* _M_next;
+};
+
+template <class _Tp>
+struct _Slist_node : public _Slist_node_base
+{
+  _Tp _M_data;
+};
+
+struct _Slist_iterator_base
+{
+  typedef size_t               size_type;
+  typedef ptrdiff_t            difference_type;
+  typedef forward_iterator_tag iterator_category;
+
+  _Slist_node_base* _M_node;
+
+  _Slist_iterator_base(_Slist_node_base* __x) : _M_node(__x) {}
+  void _M_incr() { _M_node = _M_node->_M_next; }
+
+  bool operator==(const _Slist_iterator_base& __x) const {
+    return _M_node == __x._M_node;
+  }
+  bool operator!=(const _Slist_iterator_base& __x) const {
+    return _M_node != __x._M_node;
+  }
+};
+
+//slist迭代器
+template <class _Tp, class _Ref, class _Ptr>
+struct _Slist_iterator : public _Slist_iterator_base
+{
+  typedef _Slist_iterator<_Tp, _Tp&, _Tp*>             iterator;
+  typedef _Slist_iterator<_Tp, const _Tp&, const _Tp*> const_iterator;
+  typedef _Slist_iterator<_Tp, _Ref, _Ptr>             _Self;
+
+  typedef _Tp              value_type;
+  typedef _Ptr             pointer;
+  typedef _Ref             reference;
+  typedef _Slist_node<_Tp> _Node;
+
+  _Slist_iterator(_Node* __x) : _Slist_iterator_base(__x) {}
+  _Slist_iterator() : _Slist_iterator_base(0) {}
+  _Slist_iterator(const iterator& __x) : _Slist_iterator_base(__x._M_node) {}
+
+  reference operator*() const { return ((_Node*) _M_node)->_M_data; }
+
+  _Self& operator++()
+  {
+    _M_incr();
+    return *this;
+  }
+  _Self operator++(int)
+  {
+    _Self __tmp = *this;
+    _M_incr();
+    return __tmp;
+  }
+};
+```
+
+
+
+#### 4.5.3 slist的数据结构
+
+若我们在list的源代码所见，list的数据结构实际上就是从一个哨兵结点header开始到自身的环状双链表，哨兵结点的加入使得插入、删除以及判断链表起始、终结操作可以得到非常容易的实现。同样的，slist也存在一个哨兵结点，也称为首前结点，它可以使得针对单链表首元素的插入、删除操作更加容易地实现，而不需要针对第一个结点做特殊地处理。其大致结构如下图所示：
+
+<img src="../../image/slist.jpg" alt="slist" style="zoom:50%;" />
+
+至于slist自己的结构也是按照基类+派生类两级的结构来实现，
+
+```c++
+//slist基类
+template <class _Tp, class _Alloc> 
+struct _Slist_base {
+  typedef _Alloc allocator_type;
+  allocator_type get_allocator() const { return allocator_type(); }
+
+  _Slist_base(const allocator_type&) { _M_head._M_next = 0; }
+  ~_Slist_base() { _M_erase_after(&_M_head, 0); }//将除_M_head后面的结点全部干掉
+
+protected:
+  typedef simple_alloc<_Slist_node<_Tp>, _Alloc> _Alloc_type;
+  _Slist_node<_Tp>* _M_get_node() { return _Alloc_type::allocate(1); }
+  void _M_put_node(_Slist_node<_Tp>* __p) { _Alloc_type::deallocate(__p, 1); }
+
+  _Slist_node_base* _M_erase_after(_Slist_node_base* __pos);
+  _Slist_node_base* _M_erase_after(_Slist_node_base*, _Slist_node_base*);
+
+protected:
+  _Slist_node_base _M_head;//做单链表前面的哨兵结点，注意它不是指针
+}; 
+
+//slist派生类
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class slist : private _Slist_base<_Tp,_Alloc>
+{
+  /* ... */
+public:
+  explicit slist(const allocator_type& __a = allocator_type()) : _Base(__a) {}
+
+  slist(size_type __n, const value_type& __x,
+        const allocator_type& __a =  allocator_type()) : _Base(__a)
+    { _M_insert_after_fill(&this->_M_head, __n, __x); }
+
+  explicit slist(size_type __n) : _Base(allocator_type())
+    { _M_insert_after_fill(&this->_M_head, __n, value_type()); }
+  /* ... */
+};
+```
+
+从上面的源代码可以看出slist的构造和析构过程其实是非常简单的。对于默认空的构造，它只不过就是创建出一个哨兵结点（注意该结点是直接实现在基类中，而不是以指针的形式存在）并将其next指针设为空，而具有初值链表的构造也就是先创建哨兵结点之后一次在其后面逐个插入新的结点罢了。而析构的过程更加简单，它先将哨兵结点后面的结点进行删除，然后依靠编译器所生成的析构处理掉哨兵结点。
+
+
+
+#### 4.5.3 元素的插入和删除
+
+##### 4.5.3.1 元素插入操作
+
+元素的插入操作实际上是由一个定义在外部的内联函数`__slist_make_link()`完成的，且它操纵的是结点基类指针而不是结点派生类指针。我们可以看到对于slist而言，新元素是插入在指定结点的后面而不像是普通STL顺序容器习惯那样插入在指定位置的前面。而范围（多个）元素的插入实际上是就是调用单元素插入的操作完成的，这些还是比较简单的。
+
+```c++
+//向__prev_node后插入新的结点
+inline _Slist_node_base*
+__slist_make_link(_Slist_node_base* __prev_node,
+                  _Slist_node_base* __new_node)
+{
+  __new_node->_M_next = __prev_node->_M_next;
+  __prev_node->_M_next = __new_node;
+  return __new_node;
+}
+
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class slist : private _Slist_base<_Tp,_Alloc>
+{
+  /* ... */
+private:
+  _Node* _M_insert_after(_Node_base* __pos, const value_type& __x) {
+    return (_Node*) (__slist_make_link(__pos, _M_create_node(__x)));
+  }
+
+  _Node* _M_insert_after(_Node_base* __pos) {
+    return (_Node*) (__slist_make_link(__pos, _M_create_node()));
+  }
+
+  void _M_insert_after_fill(_Node_base* __pos,
+                            size_type __n, const value_type& __x) {
+    for (size_type __i = 0; __i < __n; ++__i)
+      __pos = __slist_make_link(__pos, _M_create_node(__x));
+  }
+  /* ... */
+public:
+  //单元素插入
+  iterator insert_after(iterator __pos, const value_type& __x) {
+    return iterator(_M_insert_after(__pos._M_node, __x));
+  }
+
+  iterator insert_after(iterator __pos) {
+    return insert_after(__pos, value_type());
+  }
+
+  //范围（多个）元素插入
+  void insert_after(iterator __pos, size_type __n, const value_type& __x) {
+    _M_insert_after_fill(__pos._M_node, __n, __x);
+  }
+  /* ... */
+};
+```
+
+
+
+##### 4.5.3.2 元素删除操作
+
+元素的删除操作主要分成两种，一种是单元素删除操作，另一种是范围（多个）元素的删除，这两个操作实际上都是在slist基类上完成的，其实现非常好理解。
+
+```c++
+template <class _Tp, class _Alloc> 
+struct _Slist_base {
+  /* ... */
+  //单元素删除
+  _Slist_node_base* _M_erase_after(_Slist_node_base* __pos)
+  {
+    _Slist_node<_Tp>* __next = (_Slist_node<_Tp>*) (__pos->_M_next);
+    _Slist_node_base* __next_next = __next->_M_next;
+    __pos->_M_next = __next_next;
+    destroy(&__next->_M_data);
+    _M_put_node(__next);
+    return __next_next;
+  }
+  _Slist_node_base* _M_erase_after(_Slist_node_base*, _Slist_node_base*);
+
+protected:
+  _Slist_node_base _M_head;//做单链表前面的哨兵结点
+};  
+
+//范围元素删除
+template <class _Tp, class _Alloc> 
+_Slist_node_base*
+_Slist_base<_Tp,_Alloc>::_M_erase_after(_Slist_node_base* __before_first,
+                                        _Slist_node_base* __last_node) {
+  _Slist_node<_Tp>* __cur = (_Slist_node<_Tp>*) (__before_first->_M_next);
+  while (__cur != __last_node) {
+    _Slist_node<_Tp>* __tmp = __cur;
+    __cur = (_Slist_node<_Tp>*) __cur->_M_next;
+    destroy(&__tmp->_M_data);
+    _M_put_node(__tmp);
+  }
+  __before_first->_M_next = __last_node;
+  return __last_node;
+}
+
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class slist : private _Slist_base<_Tp,_Alloc>
+  /* ... */
+public:
+  //基类实现的封装
+  iterator erase_after(iterator __pos) {
+    return iterator((_Node*) this->_M_erase_after(__pos._M_node));
+  }
+  iterator erase_after(iterator __before_first, iterator __last) {
+    return iterator((_Node*) this->_M_erase_after(__before_first._M_node, 
+                                                  __last._M_node));
+  } 
+  /* ... */
+};
+```
+
+
+
+#### 4.5.4 slist的拼接及其衍生操作
+
+##### 4.5.4.1 元素拼接操作
+
+在slist中，元素的拼接操作splice相比于list中的拼接操作而言，非常容易理解且实现。因为它并不需要像双链表中那样处理前缀结点指针的问题，所以它只需要走两步：①从第二个链表中提出指定范围或者单元素，然后将这一范围或单个元素接入到（另一个单链表或者自身）指定结点的后面。
+
+```c++
+inline void __slist_splice_after(_Slist_node_base* __pos,
+                                 _Slist_node_base* __before_first,
+                                 _Slist_node_base* __before_last)
+{
+  if (__pos != __before_first && __pos != __before_last) {
+    _Slist_node_base* __first = __before_first->_M_next;
+    _Slist_node_base* __after = __pos->_M_next;
+    //将串链从原来的链表上剔除
+    __before_first->_M_next = __before_last->_M_next;
+    //将串链拼接到链表结点pos位置的后面
+    __pos->_M_next = __first;
+    __before_last->_M_next = __after;
+  }
+}
+
+template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
+class slist : private _Slist_base<_Tp,_Alloc>
+  /* ... */
+public:
+  // Moves the range [__before_first + 1, __before_last + 1) to *this,
+  //  inserting it immediately after __pos.  This is constant time.
+  void splice_after(iterator __pos, 
+                    iterator __before_first, iterator __before_last)
+  {
+    if (__before_first != __before_last) 
+      __slist_splice_after(__pos._M_node, __before_first._M_node, 
+                           __before_last._M_node);
+  }
+
+  // Moves the element that follows __prev to *this, inserting it immediately
+  //  after __pos.  This is constant time.
+  void splice_after(iterator __pos, iterator __prev)
+  {
+    __slist_splice_after(__pos._M_node,
+                         __prev._M_node, __prev._M_node->_M_next);
+  }
+
+
+  // Removes all of the elements from the list __x to *this, inserting
+  // them immediately after __pos.  __x must not be *this.  Complexity:
+  // linear in __x.size().
+  void splice_after(iterator __pos, slist& __x)
+  {
+    __slist_splice_after(__pos._M_node, &__x._M_head);
+  }
+  /* ... */
+};
+```
+
+
+
+##### 4.5.4.2 拼接的衍生操作
+
+归并操作：
+
+```c++
+template <class _Tp, class _Alloc>
+void slist<_Tp,_Alloc>::merge(slist<_Tp,_Alloc>& __x)
+{
+  _Node_base* __n1 = &this->_M_head;
+  while (__n1->_M_next && __x._M_head._M_next) {
+    if (((_Node*) __x._M_head._M_next)->_M_data < 
+        ((_Node*)       __n1->_M_next)->_M_data) 
+      //将__x中的第一个有效结点拼接到__n1后面
+      __slist_splice_after(__n1, &__x._M_head, __x._M_head._M_next);
+    __n1 = __n1->_M_next;
+  }
+  if (__x._M_head._M_next) {
+    __n1->_M_next = __x._M_head._M_next;
+    __x._M_head._M_next = 0;
+  }
+}
+```
+
+
+
+排序操作，其实现原理与list的排序一样，同样也是采用归并排序，具体可以看我关于list排序实现的讲解。
+
+```c++
+template <class _Tp, class _Alloc>
+void slist<_Tp,_Alloc>::sort()
+{
+  if (this->_M_head._M_next && this->_M_head._M_next->_M_next) {
+    slist __carry;
+    slist __counter[64];
+    int __fill = 0;
+      
+    while (!empty()) {
+      __slist_splice_after(&__carry._M_head,
+                           &this->_M_head, this->_M_head._M_next);
+      int __i = 0;
+      while (__i < __fill && !__counter[__i].empty()) {
+        __counter[__i].merge(__carry);
+        __carry.swap(__counter[__i]);
+        ++__i;
+      }
+      __carry.swap(__counter[__i]);
+      if (__i == __fill)
+        ++__fill;
+    }
+
+    for (int __i = 1; __i < __fill; ++__i)
+      __counter[__i].merge(__counter[__i-1]);
+    this->swap(__counter[__fill-1]);
+  }
+}
+```
+

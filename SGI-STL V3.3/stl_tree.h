@@ -313,8 +313,8 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
   _Rb_tree_node_base* __y = __z;
   _Rb_tree_node_base* __x = 0;
   _Rb_tree_node_base* __x_parent = 0;
-  /* 找一个待删结点的替代结点，用__x记录。若__z无子或者独子，
-    则__y必然就是自己，否则就是右子树中的最小结点 */
+  /* 1、当待删节点无子或独子时，__y记录待删节点，__x记录它的左子节点（有可能为null）或者右子节点；
+     2、当待删节点存在双子时，__y记录右子树中的最小节点，__x记录右子树最小节点的右子节点 */
   if (__y->_M_left == 0)     // __z has at most one non-null child. y == z.
     __x = __y->_M_right;     // __x might be null.
   else
@@ -326,6 +326,7 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
         __y = __y->_M_left;
       __x = __y->_M_right;
     }
+  //待删节点存在双子
   if (__y != __z) {          // relink y in place of z.  y is z's successor
     __z->_M_left->_M_parent = __y; 
     __y->_M_left = __z->_M_left;
@@ -345,11 +346,14 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
     else 
       __z->_M_parent->_M_right = __y;
     __y->_M_parent = __z->_M_parent;
+    
     __STD::swap(__y->_M_color, __z->_M_color);
     __y = __z;
     // __y now points to node to be actually deleted
   }
+  //待删节点独子或者无子
   else {                        // __y == __z
+    //重新认亲
     __x_parent = __y->_M_parent;
     if (__x) __x->_M_parent = __y->_M_parent;   
     if (__root == __z)
@@ -359,6 +363,8 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
         __z->_M_parent->_M_left = __x;
       else
         __z->_M_parent->_M_right = __x;
+
+    //若删除的是最小键值结点或者最大键值结点
     if (__leftmost == __z) 
       if (__z->_M_right == 0)        // __z->_M_left must be null also
         __leftmost = __z->_M_parent;
@@ -375,14 +381,17 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
   if (__y->_M_color != _S_rb_tree_red) { 
     //若删除的结点不是红节点，那么就得从祖先结点（3-结点或者4-结点中提取出一个结点以下移）
     while (__x != __root && (__x == 0 || __x->_M_color == _S_rb_tree_black))
+      //待删节点是其父节点的左节点
       if (__x == __x_parent->_M_left) {
         _Rb_tree_node_base* __w = __x_parent->_M_right;
+        //判断兄弟节点是否为红色，这种情况只有一种
         if (__w->_M_color == _S_rb_tree_red) {
           __w->_M_color = _S_rb_tree_black;
           __x_parent->_M_color = _S_rb_tree_red;
           _Rb_tree_rotate_left(__x_parent, __root);
           __w = __x_parent->_M_right;
         }
+        //判断兄弟节点的子节点是否全黑
         if ((__w->_M_left == 0 || 
              __w->_M_left->_M_color == _S_rb_tree_black) &&
             (__w->_M_right == 0 || 
