@@ -85,10 +85,10 @@ public:
 	[[nodiscard]] T max() const;
 
 private:
-	TreeNode<T> *left_rotate(TreeNode<T> *h);
-	TreeNode<T> *right_rotate(TreeNode<T> *h);
-	TreeNode<T> *left_right_rotate(TreeNode<T> *h);
-	TreeNode<T> *right_left_rotate(TreeNode<T> *h);
+	static TreeNode<T> *left_rotate(TreeNode<T> *h);
+	static TreeNode<T> *right_rotate(TreeNode<T> *h);
+	static TreeNode<T> *left_right_rotate(TreeNode<T> *h);
+	static TreeNode<T> *right_left_rotate(TreeNode<T> *h);
 
 private:
 	TreeNode<T> *create_node(const T &val);
@@ -186,7 +186,7 @@ void AVLTree<T>::clear(TreeNode<T> *h) {
 
 template<typename T>
 TreeNode<T> *AVLTree<T>::insert(TreeNode<T> *h, const T &val) {
-	if (!h) return create_node(val);
+	if (!h)return create_node(val);
 	if (val < h->value) {
 		if (h->flag == RH) h->flag = EH;
 		else if (h->flag == EH) h->flag = LH;
@@ -194,7 +194,7 @@ TreeNode<T> *AVLTree<T>::insert(TreeNode<T> *h, const T &val) {
 		else throw std::exception();
 		h->lchild = insert(h->lchild, val);
 	}
-	if (val > h->value) {
+	if (val >= h->value) {//大于等于表示可以重复插入相同的数据
 		if (h->flag == LH) h->flag = EH;
 		else if (h->flag == EH) h->flag = RH;
 		else if (h->flag == RH) {}
@@ -219,7 +219,10 @@ TreeNode<T> *AVLTree<T>::insert(TreeNode<T> *h, const T &val) {
 				h->flag = EH;
 				h->lchild->flag = LH;
 			}
-			else throw std::exception();
+			else {
+				h->flag = EH;
+				h->lchild->flag = EH;
+			}
 			h->lchild->rchild->flag = EH;
 			return left_right_rotate(h);
 		}
@@ -233,7 +236,10 @@ TreeNode<T> *AVLTree<T>::insert(TreeNode<T> *h, const T &val) {
 				h->flag = EH;
 				h->rchild->flag = RH;
 			}
-			else throw std::exception();
+			else {
+				h->flag = EH;
+				h->rchild->flag = EH;
+			}
 			h->rchild->lchild->flag = EH;
 			return right_left_rotate(h);
 		}
