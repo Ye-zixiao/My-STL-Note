@@ -30,44 +30,36 @@ int main() {
 	auto iter = itree.begin();
 	for (int i = 0; i < 10; i++) {
 		if (iter == itree.end())
-			cout << "it's endptr" << endl;
-		else cout << *iter << endl;
+			cout << "\nit's endptr" << endl;
+		else cout << *iter << ' ';
 		++iter;
 	}
-	cout << endl;
+	cout << "\n---------------" << endl;
 
 	iter = itree.begin();
 	for (int i = 0; i < 10; i++) {
 		if (iter == itree.end())
-			cout << "it's endptr" << endl;
-		else cout << *iter << endl;
+			cout << "\nit's endptr" << endl;
+		else cout << *iter << ' ';
 		--iter;
 	}
 	return 0;
 }
 
 /*结果：
-12
-23
-32
-56
+12 23 32 56
 it's endptr
 56
 it's endptr
 56
 it's endptr
 56
-
+---------------
 12
 it's endptr
-56
-32
-23
-12
+56 32 23 12
 it's endptr
-56
-32
-23
+56 32 23
 */
 ```
 
