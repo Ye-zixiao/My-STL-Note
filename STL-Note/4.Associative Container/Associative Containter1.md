@@ -1,10 +1,144 @@
 ### 5.2 _Rb_tree
 
+SGI STL红黑树容器\_Rb_tree并非是C++标准库中的成员，我们并不能直接使用到它，但它确实是STL4种有序关联容器的底层基础容器。它的实现位于源文件[stl_tree.h](stl_tree.h)中，其中比较需要我们关注的部分如下所示：
+
+1. **_Rb_tree的数据结构、节点和迭代器**
+2. _Rb_tree的构造和析构过程
+3. **元素插入和插入之后所需的红黑树再平衡操作**
+4. **元素删除和删除之后所需的红黑树再平衡操作**
+5. 其他操作，看看就行
 
 
-#### 5.2.1 ==\_Rb\_tree结点和迭代器==
+
+#### 5.2.1 ==\_Rb\_tree节点和迭代器==
+
+##### 5.2.1.1 _Rb_tree节点
+
+SGI STL红黑树容器_Rb_tree的节点、迭代器都是采用了两级继承的结构。其中红黑树节点的基类为\_Rb_tree_node_base，派生类（也即红黑树真正使用的节点）为\_Rb_tree_node，整体上看其实它的内容非常简单，不过需要注意的是它有一个特别的成员指针是用来指向其父节点的。其源代码如下：
+
+```c++
+typedef bool _Rb_tree_Color_type;
+const _Rb_tree_Color_type _S_rb_tree_red = false;
+const _Rb_tree_Color_type _S_rb_tree_black = true;
+
+struct _Rb_tree_node_base
+{
+  typedef _Rb_tree_Color_type _Color_type;
+  typedef _Rb_tree_node_base* _Base_ptr;
+
+  _Color_type _M_color; 
+  _Base_ptr _M_parent;
+  _Base_ptr _M_left;
+  _Base_ptr _M_right;
+
+  static _Base_ptr _S_minimum(_Base_ptr __x)
+  {
+    while (__x->_M_left != 0) __x = __x->_M_left;
+    return __x;
+  }
+
+  static _Base_ptr _S_maximum(_Base_ptr __x)
+  {
+    while (__x->_M_right != 0) __x = __x->_M_right;
+    return __x;
+  }
+};
+
+template <class _Value>
+struct _Rb_tree_node : public _Rb_tree_node_base
+{
+  typedef _Rb_tree_node<_Value>* _Link_type;
+  _Value _M_value_field;
+};
+```
+
+
+
+##### 5.2.1.2 _Rb_tree迭代器
+
+红黑树迭代器的基类为\_Rb\_tree\_base\_iterator，其派生类为_Rb_tree_iterator（红黑树真正使用的）。红黑树迭代器最大的责任是实现在红黑树这种特殊的非顺序容器上实现向前或向后步进的操作，以符合红黑树迭代器为双向迭代器forward_iterator的要求。这两个步进操作的实际工作基本上都是在迭代器基类中完成，分别由`_M_increment()`和`_M_decrement()`成员函数实现。
+
+当一个红黑树迭代器需要向前步进时，①它会先查看当前节点的右子树是否存在，若存在，它会步入当前节点的右子树中，找到右子树中的最小节点，然后使迭代器指向它；②若右子节点不存在，那么它会以while循环的姿态去判断自己是否是父节点的右子节点，若是则将迭代器自己暂时指向父节点，然后重新迭代检查，直到当前节点不再是父节点的右子节点为止。当从while循环退出后再将迭代器指向这个节点的父节点从完成向上方式的步进。
+
+而当一个红黑树迭代器需要向后步进的时候会有一些不同之处，它首先会判断当前节点是否是\_Rb_tree的header节点（我们会在下面的红黑树数据结构中了解到SGI STL红黑树的根节点其实有一个特殊的父节点，它同时也是红节点，充当哨兵的作用），若是，则直接将迭代器指向红黑树中的最大节点；否则会按照向前步进类似的逻辑实现对应操作。这些部分的实现大致位于源代码的第102行：
+
+```c++
+struct _Rb_tree_base_iterator
+{
+  typedef _Rb_tree_node_base::_Base_ptr _Base_ptr;
+  typedef bidirectional_iterator_tag iterator_category;
+  typedef ptrdiff_t difference_type;
+  _Base_ptr _M_node;
+
+  void _M_increment()
+  {
+    //若存在右子节点，则指向右子树中的最小节点
+    if (_M_node->_M_right != 0) {
+      _M_node = _M_node->_M_right;
+      while (_M_node->_M_left != 0)
+        _M_node = _M_node->_M_left;
+    }
+    //若不存在右子节点，则沿路向上
+    else {
+      _Base_ptr __y = _M_node->_M_parent;
+      while (_M_node == __y->_M_right) {
+        _M_node = __y;
+        __y = __y->_M_parent;
+      }
+      if (_M_node->_M_right != __y)
+        _M_node = __y;
+    }
+  }
+
+  void _M_decrement()
+  {
+    //若存在左子节点，则指向左子树的最大节点
+    if (_M_node->_M_color == _S_rb_tree_red &&
+        _M_node->_M_parent->_M_parent == _M_node)
+      _M_node = _M_node->_M_right;
+    else if (_M_node->_M_left != 0) {
+      _Base_ptr __y = _M_node->_M_left;
+      while (__y->_M_right != 0)
+        __y = __y->_M_right;
+      _M_node = __y;
+    }
+    //若不存在左子节点，则沿路径向上
+    else {
+      _Base_ptr __y = _M_node->_M_parent;
+      while (_M_node == __y->_M_left) {
+        _M_node = __y;
+        __y = __y->_M_parent;
+      }
+      _M_node = __y;
+    }
+  }
+};
+
+template <class _Value, class _Ref, class _Ptr>
+struct _Rb_tree_iterator : public _Rb_tree_base_iterator
+{
+  /* ... */
+  _Self& operator++() { _M_increment(); return *this; }
+  _Self operator++(int) {
+    _Self __tmp = *this;
+    _M_increment();
+    return __tmp;
+  }
+    
+  _Self& operator--() { _M_decrement(); return *this; }
+  _Self operator--(int) {
+    _Self __tmp = *this;
+    _M_decrement();
+    return __tmp;
+  }
+};
+```
+
+按照`increment()`和`decrement()`这两个函数的规则，我们可以发现一个有趣的点：①当红黑树迭代器从最小节点处开始不断地执行向前步进操作（不施以`!=_Rb_tree.end()`停止条件）时，一旦它遍历过header节点（也即尾后/哨兵节点）之后，它会跳到红黑树最大节点的左子树中的最小节点处，重新向前步进，形成一个固定的局部循环（如下面绿色箭头所示）。②而当红黑树迭代器从树中任一点开始向后不断步进步进（不加以停止）时，它却会从尾到前又从前跳到尾不断循环（如下面红黑箭头所示）。虽然这两个点在实际中并不会用到，但它们对于我们了解红黑树迭代器的工作原理有所帮助。
 
 <img src="..\..\image\红黑树迭代器2.jpg" alt="红黑树迭代器2" style="zoom:50%;" />
+
+下面的示例程序正反映了上述两点：
 
 ```c++
 #include <iostream>
@@ -30,16 +164,16 @@ int main() {
 	auto iter = itree.begin();
 	for (int i = 0; i < 10; i++) {
 		if (iter == itree.end())
-			cout << "\nit's endptr" << endl;
+			cout << "endptr" << ' ';
 		else cout << *iter << ' ';
 		++iter;
 	}
-	cout << "\n---------------" << endl;
+	cout << endl;
 
 	iter = itree.begin();
 	for (int i = 0; i < 10; i++) {
 		if (iter == itree.end())
-			cout << "\nit's endptr" << endl;
+			cout << "endptr" << ' ';
 		else cout << *iter << ' ';
 		--iter;
 	}
@@ -47,23 +181,10 @@ int main() {
 }
 
 /*结果：
-12 23 32 56
-it's endptr
-56
-it's endptr
-56
-it's endptr
-56
----------------
-12
-it's endptr
-56 32 23 12
-it's endptr
-56 32 23
+12 23 32 56 endptr 56 endptr 56 endptr 56
+12 endptr 56 32 23 12 endptr 56 32 23
 */
 ```
-
-
 
 
 
