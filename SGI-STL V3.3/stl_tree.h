@@ -108,13 +108,13 @@ struct _Rb_tree_base_iterator
 
   void _M_increment()
   {
-    //若存在右孩子，则步向右子节点
+    //若存在右子节点，则指向右子树中的最小节点
     if (_M_node->_M_right != 0) {
       _M_node = _M_node->_M_right;
       while (_M_node->_M_left != 0)
         _M_node = _M_node->_M_left;
     }
-    //若不存在右孩子，则沿路向上
+    //若不存在右子节点，则沿路向上
     else {
       _Base_ptr __y = _M_node->_M_parent;
       while (_M_node == __y->_M_right) {
@@ -128,6 +128,7 @@ struct _Rb_tree_base_iterator
 
   void _M_decrement()
   {
+    //若存在左子节点，则指向左子树的最大节点
     if (_M_node->_M_color == _S_rb_tree_red &&
         _M_node->_M_parent->_M_parent == _M_node)
       _M_node = _M_node->_M_right;
@@ -137,6 +138,7 @@ struct _Rb_tree_base_iterator
         __y = __y->_M_right;
       _M_node = __y;
     }
+    //若不存在左子节点，则沿路径向上
     else {
       _Base_ptr __y = _M_node->_M_parent;
       while (_M_node == __y->_M_left) {
