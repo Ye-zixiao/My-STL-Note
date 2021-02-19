@@ -46,7 +46,6 @@
 
 __STL_BEGIN_NAMESPACE
 
-//hash桶中的结点
 template <class _Val>
 struct _Hashtable_node
 {
@@ -86,8 +85,8 @@ struct _Hashtable_iterator {
   typedef _Val& reference;
   typedef _Val* pointer;
 
-  _Node* _M_cur;//指向当前的hash桶中的结点
-  _Hashtable* _M_ht;//指向hash表
+  _Node* _M_cur;
+  _Hashtable* _M_ht;
 
   _Hashtable_iterator(_Node* __n, _Hashtable* __tab) 
     : _M_cur(__n), _M_ht(__tab) {}
@@ -564,7 +563,6 @@ private:
   void _M_erase_bucket(const size_type __n, _Node* __first, _Node* __last);
   void _M_erase_bucket(const size_type __n, _Node* __last);
 
-  //从另一个哈希表中进行整体拷贝
   void _M_copy_from(const hashtable& __ht);
 
 };
@@ -717,12 +715,10 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
   const size_type __n = _M_bkt_num(__obj);
   _Node* __first = _M_buckets[__n];
 
-  //先检查是否已经在桶中，若已存在则返回false
   for (_Node* __cur = __first; __cur; __cur = __cur->_M_next) 
     if (_M_equals(_M_get_key(__cur->_M_val), _M_get_key(__obj)))
       return pair<iterator, bool>(iterator(__cur, this), false);
 
-  //若不存在桶中，则插入并返回true
   _Node* __tmp = _M_new_node(__obj);
   __tmp->_M_next = __first;
   _M_buckets[__n] = __tmp;
@@ -740,7 +736,6 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
 
   for (_Node* __cur = __first; __cur; __cur = __cur->_M_next) 
     if (_M_equals(_M_get_key(__cur->_M_val), _M_get_key(__obj))) {
-      //若元素之前就存在，则在其后插入
       _Node* __tmp = _M_new_node(__obj);
       __tmp->_M_next = __cur->_M_next;
       __cur->_M_next = __tmp;
@@ -748,7 +743,6 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
       return iterator(__tmp, this);
     }
 
-  //否则在桶的前头插入
   _Node* __tmp = _M_new_node(__obj);
   __tmp->_M_next = __first;
   _M_buckets[__n] = __tmp;
@@ -947,7 +941,6 @@ void hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
         for (size_type __bucket = 0; __bucket < __old_n; ++__bucket) {
           _Node* __first = _M_buckets[__bucket];
           while (__first) {
-            //将旧哈希表桶中的元素迁移到新哈希表桶中
             size_type __new_bucket = _M_bkt_num(__first->_M_val, __n);
             _M_buckets[__bucket] = __first->_M_next;
             __first->_M_next = __tmp[__new_bucket];
@@ -1036,11 +1029,9 @@ void hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
     for (size_type __i = 0; __i < __ht._M_buckets.size(); ++__i) {
       const _Node* __cur = __ht._M_buckets[__i];
       if (__cur) {
-        //拷贝ht中的一个有效桶
         _Node* __copy = _M_new_node(__cur->_M_val);
         _M_buckets[__i] = __copy;
 
-        //迭代拷贝桶中的串链
         for (_Node* __next = __cur->_M_next; 
              __next; 
              __cur = __next, __next = __cur->_M_next) {

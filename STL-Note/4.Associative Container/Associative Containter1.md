@@ -190,7 +190,7 @@ int main() {
 
 #### 5.2.2 _Rb_tree的数据结构
 
-实际上，若是从源文件的角度讲，其真正的红黑树类应该叫做rb_tree，但其本质就是对_Rb_tree的简单继承，而\_Rb_tree实际上又是对\_Rb_tree_base的继承。如下的类定义代码大约在源文件的第529行：
+实际上，若是从源文件的角度讲，其真正的红黑树类应该叫做rb_tree，但其本质就是对_Rb_tree的简单继承，而\_Rb_tree实际上又是对\_Rb_tree_base的继承，其中\_Rb_tree是我们学习的重点。如下的类定义代码大约在源文件的第529行：
 
 ```c++
 template <class _Tp, class _Alloc>
@@ -470,8 +470,14 @@ _Rb_tree_rebalance(_Rb_tree_node_base* __x, _Rb_tree_node_base*& __root)
 {
   __x->_M_color = _S_rb_tree_red;
   while (__x != __root && __x->_M_parent->_M_color == _S_rb_tree_red) {
-    /* 插入结点的父结点是祖父结点的左孩子 */
+    /* 插入结点的父结点是祖父结点的左孩子，则此时处理如下4种情况：
+    	1、左倾3-结点“左左”插入
+    	2、左倾3-结点“左右”插入
+    	3、4-结点“左左”插入
+    	4、4-结点“左右”插入
+    */
     if (__x->_M_parent == __x->_M_parent->_M_parent->_M_left) {
+      //_y是插入节点x的伯父
       _Rb_tree_node_base* __y = __x->_M_parent->_M_parent->_M_right;
       //处理4-结点左侧插入这种破坏平衡的情况
       if (__y && __y->_M_color == _S_rb_tree_red) {
@@ -491,7 +497,12 @@ _Rb_tree_rebalance(_Rb_tree_node_base* __x, _Rb_tree_node_base*& __root)
         _Rb_tree_rotate_right(__x->_M_parent->_M_parent, __root);
       }
     }
-    /* 插入结点的父结点时祖父结点的右孩子 */
+    /* 插入结点的父结点时祖父结点的右孩子，则此时处理如下4种情况：
+    	5、右倾3-结点“右左”插入
+    	6、右倾3-结点“右右”插入
+    	7、4-结点“右左”插入
+    	8、4-结点“右右”插入
+    */
     else {
       _Rb_tree_node_base* __y = __x->_M_parent->_M_parent->_M_left;
       //处理4-结点右侧插入这种破坏平衡的情况
@@ -582,7 +593,7 @@ inline void _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
 |     独子     | 待删节点只能为黑，且子节点必为红，此时只需将子节点变黑然后重新挂接 |
 |     双子     | 在待删节点的右子树找一个替代节点，间接转换为对替代节点的树形调整问题 |
 
-上面描述的待删节点的各种情况中，最复杂的就是待删节点无子且为黑的情况，从处理的角度上主要分成两种处理类型：①一种是待删节点是其父节点的左子节点；②另一种情况是待删节点是其父节点右子节点。但两种其实对比度比较高，理解其中一种就可以很好的理解另一种情况。上述两大类每类都有9种情况，且9种情况之间存在相互转换的关系，而SGI STL对待删节点的树形再平衡处理正是利用了这些转换关系，从而降低处理的复杂程度（但实际上还是很复杂😂！下面将近150行的代码已经说明了这一切！）。这18种情形如下所示：
+上面描述的待删节点的各种情况中，最复杂的就是待删节点无子且为黑的情况，从处理的角度上主要分成两种处理类型：①一种是待删节点是其父节点的左子节点；②另一种情况是待删节点是其父节点右子节点。但两种其实对比度比较高，理解其中一种就可以很好的理解另一种情况。上述两大类每类都有9种情况，且9种情况之间存在相互转换的关系，而SGI STL对待删节点的树形再平衡处理正是利用了这些转换关系，从而降低处理的复杂程度（但实际上还是很复杂的😂！下面将近150行的代码已经说明了这一切！）。这18种情形如下所示：
 
 <img src="..\..\image\红黑树删除的18种情况.jpg" alt="红黑树删除的18种情况" style="zoom: 50%;" />
 
@@ -767,3 +778,66 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>::find(const _Key& __k)
 
 
 
+### 5.3 由_Rb_tree衍生的有序关联容器
+
+#### 5.3.1 set
+
+set仅仅是红黑树_Rb_tree的简单套壳，并由`insert_unique()`保证容器中不会出现重复的键值。其之所以能够使得set只记录键值而不记录实值，是以将红黑树结点value_filed值域整个解析成键值，而不保存实值的方式来实现的。其实现文件位于[stl_set.h](stl_set.h)。
+
+
+
+#### 5.3.2 map
+
+map也仅仅是红黑树_Rb_tree的简单套壳，并由`insert_unique()`保证容器中不会出现重复的键值。它通过让红黑树结点value_field值域存储一个pair的数据类型，既保存键值又保存实值，并在使用时借用一个函数对象从value_field中取出键值，从而实现键-值对搜索表的功能。其实现文件位于[stl_map.h](stl_map.h)。
+
+```c++
+template <class _Key, class _Tp, class _Compare, class _Alloc>
+class map {
+public:
+  typedef _Key                  key_type;
+  typedef _Tp                   data_type;
+  typedef _Tp                   mapped_type;
+  typedef pair<const _Key, _Tp> value_type;
+  typedef _Compare              key_compare;
+
+  //嵌套类
+  class value_compare
+    : public binary_function<value_type, value_type, bool> {
+  friend class map<_Key,_Tp,_Compare,_Alloc>;
+  protected :
+    _Compare comp;
+    value_compare(_Compare __c) : comp(__c) {}
+  public:
+    bool operator()(const value_type& __x, const value_type& __y) const {
+      return comp(__x.first, __y.first);
+    }
+  };
+  /* ... */
+private:
+  typedef _Rb_tree<key_type, value_type, 
+                   _Select1st<value_type>, key_compare, _Alloc> _Rep_type;
+  _Rep_type _M_t;  // red-black tree representing map
+  /* ... */
+  _Tp& operator[](const key_type& __k) {
+    iterator __i = lower_bound(__k);
+    // __i->first is greater than or equivalent to __k.
+    /* 不再像书中的STL实现版本那样直接插入，而是先查找下是否存在
+    	，只有不存在的时候才执行插入操作 */
+    if (__i == end() || key_comp()(__k, (*__i).first))
+      __i = insert(__i, value_type(__k, _Tp()));
+    return (*__i).second;
+  }
+};
+```
+
+
+
+#### 5.3.3 multimap
+
+multimap也是红黑树_Rb_tree的简单套壳，并使用`insert_equal()`允许容器中多个重复的键值。其实现文件位于[stl_multimap.h](stl_multimap.h)。
+
+
+
+#### 5.3.4 multiset
+
+multiset也是红黑树_Rb_tree的简单套壳，同样使用`insert_equal()`允许容器中存储多个重复的键值，其实现文件位于[stl_multiset.h](stl_multiset.h)。
