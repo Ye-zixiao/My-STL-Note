@@ -128,10 +128,11 @@ struct _Rb_tree_base_iterator
 
   void _M_decrement()
   {
-    //若存在左子节点，则指向左子树的最大节点
+    //判断当前迭代器指向的是否是header节点，若是则直接不步进到红黑树的最大节点位置
     if (_M_node->_M_color == _S_rb_tree_red &&
         _M_node->_M_parent->_M_parent == _M_node)
       _M_node = _M_node->_M_right;
+    //若存在左子节点，则指向左子树的最大节点
     else if (_M_node->_M_left != 0) {
       _Base_ptr __y = _M_node->_M_left;
       while (__y->_M_right != 0)

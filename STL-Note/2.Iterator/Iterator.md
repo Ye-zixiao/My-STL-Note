@@ -299,8 +299,8 @@ void advance(Iterator &iter, Dist n) {
 因此在STL算法的实际实现中，我们不可能像上面advance的实现那样为每一个迭代器、每一个算法使用using或者typedef生成迭代器相关类型临时对象。所以在SGI STL中定义了如下几个辅助函数将重复的动作剥离出来，以生成迭代器相关类型临时对象：
 
 - **`iterator_category()`**：可以从迭代器中提取出迭代器标签类信息，并生成一个临时迭代器iterator_category对象，以帮助被传递的（算法内部调用的具体实现）函数获知它所作用的迭代器类型；
-- **`value_type()`**：可以从迭代器中提取出所指向元素的数据类型，并生成一个临时迭代器value_type*的空指针，以帮助被传递的函数获知迭代器所指向元素的数据类型；
-- **`distance_type()`**：会从迭代器中提取其difference_type类型信息，并生成一个临时迭代器difference_type*的空指针，以帮助被传递函数获知迭代器的距离数据类型
+- **`value_type()`**：可以从迭代器中提取出所指向元素的数据类型，**并生成一个临时迭代器value_type*的空指针，以帮助被传递的函数获知迭代器所指向元素的数据类型**；
+- **`distance_type()`**：会从迭代器中提取其difference_type类型信息，**并生成一个临时迭代器difference_type*的空指针**，以帮助被传递函数获知迭代器的距离数据类型
 - ...
 
 借助这种思想，我们就可以以如下的形式重新实现上面我们自己的Vector和VectorIterator：

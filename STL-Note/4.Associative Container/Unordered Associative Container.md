@@ -24,6 +24,8 @@
 
 ### 5.5 hashtable
 
+
+
 #### 5.5.1 hashtable节点和迭代器
 
 ```c++
@@ -175,6 +177,8 @@ private:
 
 
 #### 5.5.4 ==hashtable元素插入操作==
+
+##### 5.5.4.1 hashtable扩建
 
 ```c++
 template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
