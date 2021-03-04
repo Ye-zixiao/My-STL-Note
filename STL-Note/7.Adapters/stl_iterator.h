@@ -130,7 +130,7 @@ public:
   insert_iterator<_Container>&
   operator=(const typename _Container::value_type& __value) { 
     iter = container->insert(iter, __value);
-    ++iter;//重新让迭代器iter指向插入前指向的元素
+    ++iter;
     return *this;
   }
   insert_iterator<_Container>& operator*() { return *this; }
@@ -607,7 +607,6 @@ public:
   pointer operator->() const { return &(operator*()); }
 
   istream_iterator& operator++() { 
-    //前进操作会引发数据输入操作
     _M_read(); 
     return *this;
   }
@@ -628,7 +627,6 @@ private:
   void _M_read() {
     _M_ok = (_M_stream && *_M_stream) ? true : false;
     if (_M_ok) {
-      //确认输入流有效
       *_M_stream >> _M_value;
       _M_ok = *_M_stream ? true : false;
     }
