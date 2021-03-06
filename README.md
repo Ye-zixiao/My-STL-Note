@@ -16,21 +16,33 @@
 
 ## 3. 顺序容器
 
-所在目录：[3.Sequence Container](STL-Note/3.Sequence+Container)
+所在目录：[3.Sequence Container](STL-Note/3.Sequence-Container)
 
-顺序容器笔记：[3.Sequence Container.md](STL-Note/3.Sequence+Container/Sequence+Container.md)
+顺序容器笔记：[3.Sequence Container.md](STL-Note/3.Sequence-Container/Sequence-Container.md)
 
 ## 4. 关联容器
 
-所在目录：[4.Associative Container](STL-Note/4.Associative+Container)
+所在目录：[4.Associative Container](STL-Note/4.Associative-Container)
 
-有序关联容器笔记：[4.Associative Container.md](STL-Note/4.Associative+Container/Associative+Container.md)
+有序关联容器笔记：
 
-无序关联容器笔记：[4.Associative Container.md](#STL-Note/4.Associative-Container/Associative-Containter1.md)
+无序关联容器笔记：
 
 ## 5. 算法
 
 所在目录：[5.Algorithms](STL-Note/5.Algorithms)
 
 STL算法笔记：[5.Algorithms.md](STL-Note/5.Algorithms/Algorithms.md)
+
+## 6. 函数对象
+
+所在目录：[6.Functors](STL-Note/6.Functors)
+
+函数对象笔记：
+
+## 7.  适配器
+
+所在目录：[7.Adapters](STL-Note/7.Adapters)
+
+适配器笔记：
 

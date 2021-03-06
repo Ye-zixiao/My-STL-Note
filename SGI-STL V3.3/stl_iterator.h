@@ -52,6 +52,8 @@ public:
     container->push_back(__value);
     return *this;
   }
+  /* 必须让解引用运算符返回自身引用，这样*riter=new_value;
+    这样operator=操作才可以正常执行 */
   back_insert_iterator<_Container>& operator*() { return *this; }
   back_insert_iterator<_Container>& operator++() { return *this; }
   back_insert_iterator<_Container>& operator++(int) { return *this; }
@@ -602,6 +604,7 @@ public:
 
   istream_iterator() : _M_stream(0), _M_ok(false) {}
   istream_iterator(istream_type& __s) : _M_stream(&__s) { _M_read(); }
+  //用输入流对象初始化istream_iterator会默默地调用一个潜在的_M_read()操作，这需要注意点
 
   reference operator*() const { return _M_value; }
   pointer operator->() const { return &(operator*()); }
@@ -626,10 +629,12 @@ private:
   bool _M_ok;
 
   void _M_read() {
+    //检测流对象是否有效
     _M_ok = (_M_stream && *_M_stream) ? true : false;
+    //若流对象有效，则输入一个指定的内容并暂时存放在_M_value中
     if (_M_ok) {
-      //确认输入流有效
       *_M_stream >> _M_value;
+      //更新流对象的状态是否有效的信息到_M_ok中
       _M_ok = *_M_stream ? true : false;
     }
   }
@@ -675,6 +680,8 @@ public:
     if (_M_string) *_M_stream << _M_string;
     return *this;
   }
+  /* 必须让解引用运算符返回流迭代器自身引用，这样*oiter=new_value中
+    的operator=运算符就不能正常使用 */
   ostream_iterator<_Tp>& operator*() { return *this; }
   ostream_iterator<_Tp>& operator++() { return *this; } 
   ostream_iterator<_Tp>& operator++(int) { return *this; } 

@@ -141,7 +141,10 @@ struct logical_not : public unary_function<_Tp,bool>
   bool operator()(const _Tp& __x) const { return !__x; }
 };
 
-//返回一元谓词的补，现在已弃用，可以直接用lambda替代
+//   下面就是一些函数适配器及其辅助函数的定义
+
+//  unary_negate and binary_negate
+
 template <class _Predicate>
 class unary_negate
   : public unary_function<typename _Predicate::argument_type, bool> {
@@ -154,7 +157,6 @@ public:
   }
 };
 
-//返回定制的unary_negate对象
 template <class _Predicate>
 inline unary_negate<_Predicate> 
 not1(const _Predicate& __pred)
@@ -162,7 +164,6 @@ not1(const _Predicate& __pred)
   return unary_negate<_Predicate>(__pred);
 }
 
-//二元谓词的补
 template <class _Predicate> 
 class binary_negate 
   : public binary_function<typename _Predicate::first_argument_type,
@@ -179,13 +180,14 @@ public:
   }
 };
 
-//返回定制的binary_negate对象
 template <class _Predicate>
 inline binary_negate<_Predicate> 
 not2(const _Predicate& __pred)
 {
   return binary_negate<_Predicate>(__pred);
 }
+
+//   binder1st and bind2nd
 
 template <class _Operation> 
 class binder1st
@@ -195,7 +197,6 @@ protected:
   _Operation op;
   typename _Operation::first_argument_type value;
 public:
-  //绑定某二元函数对象的第一个参数
   binder1st(const _Operation& __x,
             const typename _Operation::first_argument_type& __y)
       : op(__x), value(__y) {}
@@ -205,7 +206,6 @@ public:
   }
 };
 
-//生成定制的binder1st对象
 template <class _Operation, class _Tp>
 inline binder1st<_Operation> 
 bind1st(const _Operation& __fn, const _Tp& __x) 
@@ -222,7 +222,6 @@ protected:
   _Operation op;
   typename _Operation::second_argument_type value;
 public:
-  //绑定某二元函数对象的第二个参数
   binder2nd(const _Operation& __x,
             const typename _Operation::second_argument_type& __y) 
       : op(__x), value(__y) {}
@@ -232,7 +231,6 @@ public:
   }
 };
 
-//生成定制的binder2nd对象
 template <class _Operation, class _Tp>
 inline binder2nd<_Operation> 
 bind2nd(const _Operation& __fn, const _Tp& __x) 
@@ -293,6 +291,8 @@ compose2(const _Operation1& __fn1, const _Operation2& __fn2,
   return binary_compose<_Operation1,_Operation2,_Operation3>
     (__fn1, __fn2, __fn3);
 }
+
+//   ptr_fun: use to function pointer
 
 template <class _Arg, class _Result>
 class pointer_to_unary_function : public unary_function<_Arg, _Result> {
@@ -707,6 +707,7 @@ inline const_mem_fun1_ref_t<_Ret,_Tp,_Arg>
 mem_fun_ref(_Ret (_Tp::*__f)(_Arg) const)
   { return const_mem_fun1_ref_t<_Ret,_Tp,_Arg>(__f); }
 
+//下面4个函数已经被mem_fun()和mem_fun_ref()两个重载函数所替代了
 template <class _Ret, class _Tp, class _Arg>
 inline mem_fun1_t<_Ret,_Tp,_Arg> mem_fun1(_Ret (_Tp::*__f)(_Arg))
   { return mem_fun1_t<_Ret,_Tp,_Arg>(__f); }
