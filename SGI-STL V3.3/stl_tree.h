@@ -261,7 +261,11 @@ _Rb_tree_rebalance(_Rb_tree_node_base* __x, _Rb_tree_node_base*& __root)
 {
   __x->_M_color = _S_rb_tree_red;
   while (__x != __root && __x->_M_parent->_M_color == _S_rb_tree_red) {
-    /* 插入结点的父结点是祖父结点的左孩子 */
+    /* 新插入结点的父结点是祖父结点的左孩子，则此时处理如下4种情况：
+    	1、左倾3-结点“左左”插入
+    	2、左倾3-结点“左右”插入
+    	3、4-结点“左左”插入
+    	4、4-结点“左右”插入      */
     if (__x->_M_parent == __x->_M_parent->_M_parent->_M_left) {
       _Rb_tree_node_base* __y = __x->_M_parent->_M_parent->_M_right;
       //处理4-结点左侧插入这种破坏平衡的情况
@@ -282,7 +286,11 @@ _Rb_tree_rebalance(_Rb_tree_node_base* __x, _Rb_tree_node_base*& __root)
         _Rb_tree_rotate_right(__x->_M_parent->_M_parent, __root);
       }
     }
-    /* 插入结点的父结点时祖父结点的右孩子 */
+    /* 插入结点的父结点时祖父结点的右孩子，则此时处理如下4种情况：
+    	5、右倾3-结点“右左”插入
+    	6、右倾3-结点“右右”插入
+    	7、4-结点“右左”插入
+    	8、4-结点“右右”插入    */
     else {
       _Rb_tree_node_base* __y = __x->_M_parent->_M_parent->_M_left;
       //处理4-结点右侧插入这种破坏平衡的情况
@@ -329,7 +337,8 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
         __y = __y->_M_left;
       __x = __y->_M_right;
     }
-  //待删节点存在双子
+  /* 待删节点存在双子，用右子树的最小节点替代待删结点，然后将待删结点从中脱离出来，从而
+    使得__y指向待删结点。这样原先对待删结点的树形调整问题变成了对替代节点的树形调整问题 */
   if (__y != __z) {          // relink y in place of z.  y is z's successor
     __z->_M_left->_M_parent = __y; 
     __y->_M_left = __z->_M_left;
@@ -354,7 +363,7 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
     __y = __z;
     // __y now points to node to be actually deleted
   }
-  //待删节点独子或者无子
+  /* 删节点独子或者无子，删除后__y指向待删节点 */
   else {                        // __y == __z
     //重新认亲
     __x_parent = __y->_M_parent;
@@ -382,7 +391,7 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
         __rightmost = _Rb_tree_node_base::_S_maximum(__x);
   }
   if (__y->_M_color != _S_rb_tree_red) { 
-    //若删除的结点不是红节点，那么就得从祖先结点（3-结点或者4-结点中提取出一个结点以下移）
+    //只有“无子且黑”和“双子->转换成替代节点无子且黑”这两种情况才会进入这个循环！
     while (__x != __root && (__x == 0 || __x->_M_color == _S_rb_tree_black))
       //待删节点是其父节点的左节点
       if (__x == __x_parent->_M_left) {
@@ -944,6 +953,8 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
     __comp = _M_key_compare(_KeyOfValue()(__v), _S_key(__x));
     __x = __comp ? _S_left(__x) : _S_right(__x);
   }
+  /* 下面开始比较插入点的前一个结点是否与欲插入结点的键值key相同，
+    只有在不相同的情况下才能保证插入的节点键值key独一无二 */
   iterator __j = iterator(__y);   
   if (__comp)
     if (__j == begin())     

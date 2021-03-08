@@ -111,7 +111,7 @@ private:
 
 
 
-#### 5.5.3 hashtable的构造/析构过程
+#### 5.5.3 hashtable构造/析构过程
 
 ```c++
 template <class _Val, class _Key, class _HashFcn,
@@ -309,7 +309,7 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
 
 
 
-#### 5.5.5 hashtable的其他操作
+#### 5.5.5 hashtable其他操作
 
 ##### 5.5.5.1 元素删除操作
 
@@ -425,7 +425,7 @@ public:
 
 
 
-### 5.6 由hashtable衍生的无序关联容器
+### 5.6 hashtable衍生的无序关联容器
 
 在SGI STL中由于hashtable衍生出来的无序关联容器在那个年代还未加入到C++的标准中，它们并没有规范、完整的hash仿函数、判等equalKey仿函数可以供使用，因此用户必须为这些容器提供针对健key的特例化hash仿函数和判断equalKey仿函数。当然在当前时代下，无序关联容器unordered_map、unordered_set、unordered_multimap、unordered_mutliset并没有这种担忧。
 

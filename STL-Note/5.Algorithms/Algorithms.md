@@ -36,7 +36,7 @@ C++算法库中的大部分算法实现都主要集中在[stl_algo.h](stl_algo.h
 
 ##### 6.3.1.1 power
 
-该乘幂算法只支持对正数的幂次方计算。
+该乘幂算法只支持对正次幂的计算，不过稍微改造下就可以支持对负次幂的计算。
 
 ```c++
 template<class T, class Integer, class MonoidOperatoion>
@@ -66,7 +66,7 @@ inline T power(T x, Integer n) {
 }
 ```
 
-> 这个算法在《剑指offer》面试题中有出现。
+> 这个算法与《剑指offer》面试题16的查考知识点相同。
 
 
 
@@ -686,6 +686,8 @@ inline _ForwardIter partition(_ForwardIter __first,
   return __partition(__first, __last, __pred, __ITERATOR_CATEGORY(__first));
 }
 ```
+
+> 剑指offer 面试题21就是在考察这个算法，其所用的思想方法正好对应上面SGI STL的源代码，即快慢指针和双指针。
 
 
 
