@@ -324,8 +324,8 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
   _Rb_tree_node_base* __y = __z;
   _Rb_tree_node_base* __x = 0;
   _Rb_tree_node_base* __x_parent = 0;
-  /* 1、当待删节点无子或独子时，__y记录待删节点，__x记录它的左子节点（有可能为null）或者右子节点；
-     2、当待删节点存在双子时，__y记录右子树中的最小节点，__x记录右子树最小节点的右子节点 */
+  /* ● 当待删节点无子或独子时，__y记录待删节点，__x记录它的左子节点（有可能为null）或者右子节点；
+     ● 当待删节点存在双子时，__y记录右子树中的最小节点，__x记录右子树最小节点的右子节点 */
   if (__y->_M_left == 0)     // __z has at most one non-null child. y == z.
     __x = __y->_M_right;     // __x might be null.
   else
@@ -337,7 +337,7 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
         __y = __y->_M_left;
       __x = __y->_M_right;
     }
-  /* 待删节点存在双子，用右子树的最小节点替代待删结点，然后将待删结点从中脱离出来，从而
+  /* 1、待删节点存在双子，用右子树的最小节点替代待删结点，然后将待删结点从中脱离出来，从而
     使得__y指向待删结点。这样原先对待删结点的树形调整问题变成了对替代节点的树形调整问题 */
   if (__y != __z) {          // relink y in place of z.  y is z's successor
     __z->_M_left->_M_parent = __y; 
@@ -363,7 +363,7 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
     __y = __z;
     // __y now points to node to be actually deleted
   }
-  /* 删节点独子或者无子，删除后__y指向待删节点 */
+  /* 2、删节点独子或者无子，删除后__y指向待删节点 */
   else {                        // __y == __z
     //重新认亲
     __x_parent = __y->_M_parent;
@@ -391,7 +391,9 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
         __rightmost = _Rb_tree_node_base::_S_maximum(__x);
   }
   if (__y->_M_color != _S_rb_tree_red) { 
-    //只有“无子且黑”和“双子->转换成替代节点无子且黑”这两种情况才会进入这个循环！
+    /* 3、虽然只要待删节点是黑节点就可以进入这个if（也就是说“无子且红”进入不了这个if）
+      ，但只有“无子且黑”（包括双子转化而来的那种情况）才能进入这个while循环之中，而
+      “独子”情况进入不了这种情况*/
     while (__x != __root && (__x == 0 || __x->_M_color == _S_rb_tree_black))
       //待删节点是其父节点的左节点
       if (__x == __x_parent->_M_left) {

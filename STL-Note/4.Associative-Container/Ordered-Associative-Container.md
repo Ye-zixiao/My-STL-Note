@@ -601,7 +601,7 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
 
 由于可重复插入操作放松了对插入过程中向下路径中节点键值与欲插入节点键值相等性的检查，正是如此也才能够保证可以重复插入相同键值的节点。
 
-而独一插入与之不同，它会在第一个`while`跳出后步入到插入点之后将插入点位置的指针转化为红黑树迭代器，然后向后步进（即--，因为插入点的位置必然在相同键值节点的尾后），利用”***a<b且b<a即是==***“的原理检查比较点前一个节点的键值key是否与欲插入节点的键值相同。只有在不相同，即不存在重复键值结点的情况下才能插入新的节点。例如我们试图插入3，而红黑树上存有1、2、3、4，由于插入点在于4的节点上而且4的前面与欲插入的3键值相同，所以插入失败。
+而独一插入与之不同，它会在第一个`while`跳出后步入到插入点之后将插入点位置的指针转化为红黑树迭代器，然后向后步进（即--，因为插入点的位置必然在相同键值节点的尾后），利用”***a<b和b<a都不成立即是==***“的原理检查比较点前一个节点的键值key是否与欲插入节点的键值相同。只有在不相同，即不存在重复键值结点的情况下才能插入新的节点。例如我们试图插入3，而红黑树上存有1、2、3、4，由于插入点在于4的节点上而且4的前面与欲插入的3键值相同，所以插入失败。
 
 ```c++
 template <class _Key, class _Value, class _KeyOfValue, 
@@ -842,8 +842,9 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
   _Rb_tree_node_base* __y = __z;
   _Rb_tree_node_base* __x = 0;
   _Rb_tree_node_base* __x_parent = 0;
-  /* 1、当待删节点无子或独子时，__y记录待删节点，__x记录它的左子节点（可能为null）或者右子节点；
-     2、当待删节点存在双子时，__y记录右子树中的最小节点，__x记录右子树最小节点的右子节点 */
+  /* ● 当待删节点无子或独子时，__y记录待删节点，__x记录它的左子节点（有可能为null）或右子节点；
+     ● 当待删节点存在双子时，__y记录右子树中的最小节点，__x记录右子树最小节点的右子节点。
+     具体可以见下面的图示     */
   if (__y->_M_left == 0)     // __z has at most one non-null child. y == z.
     __x = __y->_M_right;     // __x might be null.
   else
@@ -855,7 +856,7 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
         __y = __y->_M_left;
       __x = __y->_M_right;
     }
-  /* 待删节点存在双子，用右子树的最小节点替代待删结点，然后将待删结点从中脱离出来，从而
+  /* 1、待删节点存在双子，用右子树的最小节点替代待删结点，然后将待删结点从中脱离出来，从而
     使得__y指向待删结点。这样原先对待删结点的树形调整问题变成了对替代节点的树形调整问题 */
   if (__y != __z) {          // relink y in place of z.  y is z's successor
     __z->_M_left->_M_parent = __y; 
@@ -881,7 +882,7 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
     __y = __z;
     // __y now points to node to be actually deleted
   }
-  /* 删节点独子或者无子，删除后__y指向待删节点 */
+  /* 2、删节点独子或者无子，删除后__y指向待删节点 */
   else {                        // __y == __z
     //重新认亲
     __x_parent = __y->_M_parent;
@@ -909,7 +910,9 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
         __rightmost = _Rb_tree_node_base::_S_maximum(__x);
   }
   if (__y->_M_color != _S_rb_tree_red) { 
-    //只有“无子且黑”和“双子->转换成替代节点无子且黑”这两种情况才会进入这个循环！
+    /* 3、虽然只要待删节点是黑节点就可以进入这个if（也就是说“无子且红”进入不了这个if）
+      ，但只有“无子且黑”（包括双子转化而来的那种情况）才能进入这个while循环之中，而
+      “独子”情况进入不了这种情况*/
     while (__x != __root && (__x == 0 || __x->_M_color == _S_rb_tree_black))
       //待删节点是其父节点的左节点
       if (__x == __x_parent->_M_left) {
@@ -975,7 +978,8 @@ _Rb_tree_rebalance_for_erase(_Rb_tree_node_base* __z,
       }
     if (__x) __x->_M_color = _S_rb_tree_black;
   }
-};
+  return __y;
+}
 ```
 
 对于函数种第一个部分中各个指针的指向我用如下图展示了下（方便理解）：

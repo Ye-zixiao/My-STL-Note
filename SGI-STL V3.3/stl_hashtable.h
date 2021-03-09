@@ -577,7 +577,9 @@ _Hashtable_iterator<_Val,_Key,_HF,_ExK,_EqK,_All>::operator++()
   const _Node* __old = _M_cur;
   _M_cur = _M_cur->_M_next;
   if (!_M_cur) {
+    //取出原来hashtable桶所在的下标
     size_type __bucket = _M_ht->_M_bkt_num(__old->_M_val);
+    //依次在hashtable紧挨着的表格中找到一个有效的表格（桶），取出其中的桶节点指针给_M_cur
     while (!_M_cur && ++__bucket < _M_ht->_M_buckets.size())
       _M_cur = _M_ht->_M_buckets[__bucket];
   }
@@ -947,7 +949,7 @@ void hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
         for (size_type __bucket = 0; __bucket < __old_n; ++__bucket) {
           _Node* __first = _M_buckets[__bucket];
           while (__first) {
-            //将旧哈希表桶中的元素迁移到新哈希表桶中
+            //将旧哈希表桶中的桶节点迁移到新哈希表桶中
             size_type __new_bucket = _M_bkt_num(__first->_M_val, __n);
             _M_buckets[__bucket] = __first->_M_next;
             __first->_M_next = __tmp[__new_bucket];
@@ -955,6 +957,7 @@ void hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
             __first = _M_buckets[__bucket];          
           }
         }
+        //交换临时与原先的bucket vector
         _M_buckets.swap(__tmp);
       }
 #         ifdef __STL_USE_EXCEPTIONS
