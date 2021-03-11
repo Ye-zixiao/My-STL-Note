@@ -1957,11 +1957,13 @@ _ForwardIter __lower_bound(_ForwardIter __first, _ForwardIter __last,
     __half = __len >> 1;
     __middle = __first;
     advance(__middle, __half);
+    //若中间元素值小于val，则到后半部分找
     if (*__middle < __val) {
       __first = __middle;
       ++__first;
       __len = __len - __half - 1;
     }
+    //否则中间元素大于等于val就到前半部分找。它的想法是尽可能往前找
     else
       __len = __half;
   }
@@ -2424,7 +2426,7 @@ void __merge_adaptive(_BidirectionalIter __first,
     _Pointer __buffer_end = copy(__middle, __last, __buffer);
     __merge_backward(__first, __middle, __buffer, __buffer_end, __last);
   }
-  //临时缓冲区空间不足，但空间不为0
+  //临时缓冲区空间不足，且空间同时小于len1和len2
   else {
     _BidirectionalIter __first_cut = __first;
     _BidirectionalIter __second_cut = __middle;
@@ -2442,15 +2444,15 @@ void __merge_adaptive(_BidirectionalIter __first,
       __first_cut = upper_bound(__first, __middle, *__second_cut);
       distance(__first, __first_cut, __len11);
     }
-    /* 将[first_cut,second_cut)的元素以middle为中心进行旋转，
-      旋转后[first_cut,second_cut)必然有序 */
+    /* 将[first_cut, second_cut)的元素以middle为中心进行旋转，这部分的元素必然有序，
+      且new_middle前的元素必然都是小于new_middle后的元素！ */
     _BidirectionalIter __new_middle =
       __rotate_adaptive(__first_cut, __middle, __second_cut, __len1 - __len11,
                         __len22, __buffer, __buffer_size);
-    //以递归调用方式处理左半段
+    //递归处理new_middle左侧半部分
     __merge_adaptive(__first, __first_cut, __new_middle, __len11,
                      __len22, __buffer, __buffer_size);
-    //以递归调用方式处理右半段
+    //递归处理new_middle右侧半部分
     __merge_adaptive(__new_middle, __second_cut, __last, __len1 - __len11,
                      __len2 - __len22, __buffer, __buffer_size);
   }

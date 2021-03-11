@@ -2,6 +2,8 @@
 
 体系总览：[STL-Note.md](STL-Note/STL-Note.md)
 
+
+
 ## 1. 各章节目录与对应笔记
 
 |                        章节                        |                             笔记                             |
@@ -18,6 +20,6 @@
 
 ## 2. 参考资料
 
-1. 《[STL源码剖析](book/STL源码剖析简体中文.pdf)》，侯捷著
-2.     [SGI-STL V3.3源代码](SGI-STL V3.3)
+1. [STL源码剖析](book/STL源码剖析简体中文.pdf)，侯捷著
+2. [SGI-STL V3.3源代码](SGI-STL V3.3)
 

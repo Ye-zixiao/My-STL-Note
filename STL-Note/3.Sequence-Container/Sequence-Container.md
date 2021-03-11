@@ -1631,7 +1631,6 @@ __pop_heap(_RandomAccessIterator __first, _RandomAccessIterator __last,
   //且最后一个元素也已经被记录，就是实参__value
   *__result = *__first;
   __adjust_heap(__first, _Distance(0), _Distance(__last - __first), __value);
-                      //这里传入的长度不是last-first+1！，所以二叉堆的长度被缩短了
 }
 
 template <class _RandomAccessIterator, class _Tp>
@@ -1639,7 +1638,7 @@ inline void
 __pop_heap_aux(_RandomAccessIterator __first, _RandomAccessIterator __last,
                _Tp*)
 {
-  __pop_heap(__first, __last - 1, __last - 1, 
+  __pop_heap(__first, __last - 1, __last - 1, //长度被缩减了1
              _Tp(*(__last - 1)), __DISTANCE_TYPE(__first));
              //这里的__DISTANCE_TYPE仅仅是为了模板实参推断
 }
