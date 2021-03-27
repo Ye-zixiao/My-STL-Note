@@ -2156,3 +2156,4 @@ void slist<_Tp,_Alloc>::sort()
 }
 ```
 
+> 文件[slist_sort.cpp](slist_sort.cpp)简单的复现了这种自底向上的归并排序算法。
