@@ -2,7 +2,7 @@
 
 ### 6.1 算法库纵览
 
-![Snipaste_2021-02-28_10-51-18](file://E:\Desktop\My-STL-Note\image\Snipaste_2021-02-28_10-51-18.png?lastModify=1615426560)
+<img src="../../image/Snipaste_2021-02-28_10-51-18.png" alt="Snipaste_2021-02-28_10-51-18" style="zoom: 80%;" />
 
 在本章中，除了上述较新标准和C库下的算法实现没有在书中提到之外，基本上都可以在书中找到。不过并不是每一个算法都值得我们特别注意，事实上，我们阅读源代码的目的更多为了学习一些比较重要算法的思想和SGI STL为实现之而使用的编程技法，因此在这里我仅仅列出如下一些个人觉得值得学习的算法：
 
@@ -40,11 +40,11 @@ C++算法库中的大部分算法实现都主要集中在[stl_algo.h](stl_algo.h
 
 ##### 6.3.1.1 power
 
-该乘幂算法只支持对正次幂的计算，不过稍微改造下就可以支持对负次幂的计算。这个算法其实利用到了幂次运算的分解原理：
-
-
-
-根据这个递推关系，对于x的13（二进制1101）次方，我们其实可以先计算，这个值既需要保留以用做计算最后结果，而且还可以用来计算下一个分解式，例如，即存在一值多用。这也便是下面有两个while的缘故，其中第一个while就是用来计算最小的分解式，而第二个while是用来计算后续的更大的分解式，并将每一个分解式乘到result之中。
+该乘幂算法只支持对正次幂的计算，不过稍微改造下就可以支持对负次幂的计算。这个算法其实利用到了幂次运算的分解原理（仅举了一个特例）：
+$$
+x^{13}=x^{1101_2}=x^{1000_2}\times{x^{0100_2}}\times{x^{0001_2}}
+$$
+根据这个递推关系，对于x的13（二进制1101）次方，我们其实可以先计算，这个值既需要保留以用做计算最后结果，而且还可以用来计算下一个分解式，即存在一值多用。这也便是下面有两个while的缘故，其中第一个while就是用来计算最小的分解式，而第二个while是用来计算后续的更大的分解式，并将每一个分解式乘到result之中。
 
 ```c++
  template<class T, class Integer, class MonoidOperatoion>
@@ -74,7 +74,23 @@ C++算法库中的大部分算法实现都主要集中在[stl_algo.h](stl_algo.h
  }
 ```
 
-> 这个算法与《剑指offer》面试题16的查考知识点相同。
+这个算法与《剑指offer》面试题16的查考知识点相同。其实这种算法可以用更简单的代码进行编写，如下：
+
+```c++
+double myPow(double x, int n) {
+  if (x == 0.0) return x;
+
+  double result = 1.0;
+  long m = abs(n);
+  if (n < 0) x = 1 / x;
+  while (m > 0) {
+	if (m & 0x1) result *= x;
+	m >>= 1;
+	x *= x;
+  }
+  return result;
+}
+```
 
 
 
@@ -104,7 +120,7 @@ SGI STL中的`search()`算法采用的是典型的暴力搜索方法。对于一
    _ForwardIter2 __p1, __p;
    __p1 = __first2; ++__p1;
    _ForwardIter1 __current = __first1;
-   //这里采用的就是暴力搜索法
+   // 这里采用的就是暴力搜索法
    while (__first1 != __last1) {
      __first1 = find(__first1, __last1, *__first2);
      if (__first1 == __last1)
@@ -116,7 +132,7 @@ SGI STL中的`search()`算法采用的是典型的暴力搜索方法。对于一
        return __last1;
  
      while (*__current == *__p) {
-       //若所有元素都对上了，则返回该模式序列在欲查找序列上的首元素迭代器
+       // 若所有元素都对上了，则返回该模式序列在欲查找序列上的首元素迭代器
        if (++__p == __last2)
          return __first1;
        if (++__current == __last1)
@@ -428,6 +444,7 @@ _OutputIter set_union(_InputIter1 __first1, _InputIter1 __last1,
     }
     ++__result;
   }
+  // 这个技巧蛮有意思的
   return copy(__first2, __last2, copy(__first1, __last1, __result));
 }
 ```
@@ -452,7 +469,7 @@ bool includes(_InputIter1 __first1, _InputIter1 __last1,
     else
       ++__first1, ++__first2;
 
-  //跳出循环后检查序列二是否到尾端了，若没有到说明序列二中有序列一没有的元素
+  // 跳出循环后检查序列二是否到尾端了，若没有到说明序列二中有序列一没有的元素
   return __first2 == __last2;
 }
 ```
@@ -503,7 +520,7 @@ _OutputIter merge(_InputIter1 __first1, _InputIter1 __last1,
 
 <img src="../../image/merge_adaptive.png" alt="merge_adaptive" style="zoom:67%;" />
 
-而当临时缓冲区生成失败时，`inplace_merge_aux()`辅助函数就会调用一个无需临时缓冲区就能够执行原地归并的实现函数`__merge_without_buffer()`。这个函数由于不适用临时缓冲区，所以效率相对于有缓冲区的归并实现函数差一些，不过它实现所借用的思想基本上和`__merge_adaptive()`如出一辙，所以不再赘述之。
+而当临时缓冲区生成失败时，`inplace_merge_aux()`辅助函数就会调用一个无需临时缓冲区就能够执行原地归并的实现函数`__merge_without_buffer()`。这个函数由于不使用临时缓冲区，所以效率相对于有缓冲区的归并实现函数差一些，不过它实现所借用的思想基本上和`__merge_adaptive()`如出一辙，所以不再赘述之。
 
 ```c++
 template <class _BidirectionalIter, class _Distance>
@@ -847,13 +864,13 @@ _ForwardIter __lower_bound(_ForwardIter __first, _ForwardIter __last,
     __half = __len >> 1;
     __middle = __first;
     advance(__middle, __half);
-    //若中间元素值小于val，则到后半部分找
+    // 若中间元素值小于val，则到后半部分找
     if (*__middle < __val) {
       __first = __middle;
       ++__first;
       __len = __len - __half - 1;
     }
-    //否则中间元素大于等于val就到前半部分找。它的想法是尽可能往前找
+    // 否则中间元素大于等于val就到前半部分找。它的想法是尽可能往前找
     else
       __len = __half;
   }
@@ -934,10 +951,10 @@ __equal_range(_ForwardIter __first, _ForwardIter __last, const _Tp& __val,
     else if (__val < *__middle)
       __len = __half;
     else {
-      //在[first,middle)中找等于val区间的首元素迭代器
+      // 在[first,middle)中找等于val区间的首元素迭代器
       __left = lower_bound(__first, __middle, __val);
       advance(__first, __len);
-      //在[middle+1,last)中找等于val区间的尾后元素迭代器
+      // 在[middle+1,last)中找等于val区间的尾后元素迭代器
       __right = upper_bound(++__middle, __first, __val);
       return pair<_ForwardIter, _ForwardIter>(__left, __right);
     }
@@ -1128,7 +1145,7 @@ inline void __linear_insert(_RandomAccessIter __first,
     __unguarded_linear_insert(__last, __val);
 }
 
-//插入排序
+// 插入排序
 template <class _RandomAccessIter>
 void __insertion_sort(_RandomAccessIter __first, _RandomAccessIter __last) {
   if (__first == __last) return; 
@@ -1170,19 +1187,19 @@ void __introsort_loop(_RandomAccessIter __first,
 {
   while (__last - __first > __stl_threshold) {  //__stl_threshold==16
     if (__depth_limit == 0) {
-      //当分割次数超限后它就会自动调用堆排序来完成子序列的排序任务
+      // 当分割次数超限后它就会自动调用堆排序来完成子序列的排序任务
       partial_sort(__first, __last, __last);
       return;
     }
     --__depth_limit;
 
-    //使用三取样切分方式
+    // 使用三取样切分方式
     _RandomAccessIter __cut =
       __unguarded_partition(__first, __last,
                             _Tp(__median(*__first,
                                          *(__first + (__last - __first)/2),
                                          *(__last - 1))));
-    //对于右半部分子序列进行递归调用，对于左半部分子序列重新进入迭代处理
+    // 对于右半部分子序列进行递归调用，对于左半部分子序列重新进入迭代处理
     __introsort_loop(__cut, __last, (_Tp*) 0, __depth_limit);
     __last = __cut;
   }
@@ -1194,9 +1211,9 @@ inline void sort(_RandomAccessIter __first, _RandomAccessIter __last) {
     __introsort_loop(__first, __last,
                      __VALUE_TYPE(__first),
                      __lg(__last - __first) * 2);
-                     /* __lg()函数返回的值val用来告知调用的底层__introsort_loop()最多只能
-                      对序列分割val次，防止出现分割恶化的现象 */
-    //当由快速排序差不多将序列几近有序状态后，就调用插入排序来完成最后的收尾排序工作
+                   /* __lg()函数返回的值val用来告知调用的底层__introsort_loop()最多只能
+                     对序列分割val次，防止出现分割恶化的现象 */
+    // 当由快速排序差不多将序列几近有序状态后，就调用插入排序来完成最后的收尾排序工作
     __final_insertion_sort(__first, __last);
   }
 }

@@ -18,7 +18,7 @@
 
 在实际中，Hash表的实现更愿意采纳拉链法，即在Hash表中的每一个表格中维护一个链表，每一个具有相同哈希值的元素都会挂接到相同的链表中，这样也就解决了碰撞问题。至于性能，只要链表足够短查找、插入、删除的性能也并不会收到太大的影响。
 
-Java中采用了一种更进一步的拉链法，即在Hash表的表格中在尾随元素较少的情况下维护一个链表，当链表中的数量超过了一个阈值后就转换为树的形式。这样也是一种很好的思路，不过更一般处理Hash表中元素过多容易引发长链表的途径是扩大Hash表+重新插入原Hash表中元素。当然这并不是说Java中的Hash表不扩建！
+Java中采用了一种更进一步的拉链法，即在Hash表的表格中在尾随元素较少的情况下维护一个链表，当链表中的数量超过了一个阈值后就转换为树的形式。这样也是一种很好的思路，不过更一般处理Hash表中元素过多容易引发长链表的途径是扩大Hash表+重新插入原Hash表中元素。当然这并不是说Java中的Hash表不扩建，因为我也没看过Java具体怎么做😂。
 
 SGI STL Hash表的实现便是采用了第一种方法，并且按照如下规范命名Hash表中的组件：1）将Hash表表格维护的链表称为桶bucket，每一个桶中存储着具有相同Hash值的元素；2）将桶中的每一个记录元素的节点称为桶节点，这是我们实现Hash表的最小单元，Hash表表格实际记录的就是一个指向桶节点的指针。具体见下图所示：
 
@@ -27,6 +27,38 @@ SGI STL Hash表的实现便是采用了第一种方法，并且按照如下规�
 
 
 #### 5.4.1.3 hash函数
+
+<img src="../../image/Snipaste_2021-04-07_11-48-15.png" alt="Snipaste_2021-04-07_11-48-15" style="zoom: 80%;" />
+
+顺便提下，若一个用户需要为一个自定义的类提供一个哈希函数，则用户自己必须为标准库中的哈希函数做一个全特化处理，并加入到std的命名空间中。如下所示：
+
+```c++
+class Test {
+ public:
+  Test(std::string str) : string_(std::move(str)) {}
+  [[nodiscard]] const std::string &get() const { return string_; }
+  void set(const std::string &str) { string_ = str; }
+  
+  // 从标准库中关于无序关联容器的类声明可以看出自定义类类型必须重载operator==
+  // 运算符或者传递进去一个比较函数！
+  friend inline bool operator==(const Test &lhs, const Test &rhs) {
+	return lhs.string_ == rhs.string_;
+  }
+ private:
+  std::string string_;
+};
+
+namespace std {
+template<>
+struct hash<Test> {
+  using result_type = size_t;
+  using argument_type = Test;
+  result_type operator()(const argument_type &arg) const {
+	return hash<string>()(arg.get());
+  }
+};
+} // namespace std
+```
 
 
 
@@ -61,6 +93,8 @@ struct _Hashtable_node
 
 根据源代码可以看出，hashtable迭代器是一种前向迭代器，这便意味着对于hashtable的迭代器而言，它最为主要的工作就是重载`operator++()`。为了实现这一目的，迭代器在内部记录了①一个指向具体hashtable桶节点的指针和②一个指向hashtable的指针。前者的目的是为了方便迭代器在桶中节点间进行步进，而后者的目的是为了能够使得迭代器能够取得下一个紧挨且有效表格(桶)的下标，然后取出表格中指针更新指向桶节点的指针。
 
+为了能够方便hashtable迭代器对哈希表的访问，哈希表这个类会将哈希表迭代器类设置为自己的友元类！
+
 ```c++
 template <class _Val, class _Key, class _HashFcn,
           class _ExtractKey, class _EqualKey, class _Alloc>
@@ -69,8 +103,8 @@ struct _Hashtable_iterator {
   typedef forward_iterator_tag iterator_category;
   /* ... */
 
-  _Node* _M_cur;//指向当前的hash桶中的结点
-  _Hashtable* _M_ht;//指向hash表
+  _Node* _M_cur;// 指向当前的hash桶中的结点
+  _Hashtable* _M_ht;// 指向hash表
 
   _Hashtable_iterator(_Node* __n, _Hashtable* __tab) 
     : _M_cur(__n), _M_ht(__tab) {}
@@ -92,9 +126,9 @@ _Hashtable_iterator<_Val,_Key,_HF,_ExK,_EqK,_All>::operator++()
   const _Node* __old = _M_cur;
   _M_cur = _M_cur->_M_next;
   if (!_M_cur) {
-    //取出原来hashtable桶所在的下标
+    // 取出原来hashtable桶所在的下标
     size_type __bucket = _M_ht->_M_bkt_num(__old->_M_val);
-    //依次在hashtable紧挨着的表格中找到一个有效的表格（桶），取出其中的桶节点指针给_M_cur
+    // 依次在hashtable紧挨着的表格中找到一个有效的表格（桶），取出其中的桶节点指针给_M_cur
     while (!_M_cur && ++__bucket < _M_ht->_M_buckets.size())
       _M_cur = _M_ht->_M_buckets[__bucket];
   }
@@ -116,6 +150,10 @@ public:
     /* ... */
 private:
   typedef _Hashtable_node<_Val> _Node;
+    
+  // 哈希表迭代器是哈希表的友元类
+  friend struct
+  _Hashtable_iterator<_Val,_Key,_HashFcn,_ExtractKey,_EqualKey,_Alloc>;
 
 public:
   typedef _Alloc allocator_type;
@@ -189,7 +227,7 @@ private:
     _M_buckets.insert(_M_buckets.end(), __n_buckets, (_Node*) 0);
     _M_num_elements = 0;
   }
-    /* ... */
+  /* ... */
 };
 ```
 
@@ -253,11 +291,11 @@ void hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
     for (size_type __i = 0; __i < __ht._M_buckets.size(); ++__i) {
       const _Node* __cur = __ht._M_buckets[__i];
       if (__cur) {
-        //拷贝ht中的一个有效桶
+        // 拷贝ht中的一个有效桶
         _Node* __copy = _M_new_node(__cur->_M_val);
         _M_buckets[__i] = __copy;
 
-        //迭代拷贝桶中的串链
+        // 迭代拷贝桶中的串链
         for (_Node* __next = __cur->_M_next; 
              __next; 
              __cur = __next, __next = __cur->_M_next) {
@@ -353,7 +391,7 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
   const size_type __n = _M_bkt_num(__obj);
   _Node* __first = _M_buckets[__n];
 
-  //先检查是否已经在桶中，若已存在则返回false
+  // 先检查是否已经在桶中，若已存在则返回false
   for (_Node* __cur = __first; __cur; __cur = __cur->_M_next) 
     if (_M_equals(_M_get_key(__cur->_M_val), _M_get_key(__obj)))
       return pair<iterator, bool>(iterator(__cur, this), false);
@@ -447,7 +485,7 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>::erase(const key_type& __key)
   if (__first) {
     _Node* __cur = __first;
     _Node* __next = __cur->_M_next;
-    //尽可能先删除桶链表中第一个节点后的节点
+    // 尽可能先删除桶链表中第一个节点后的节点
     while (__next) {
       if (_M_equals(_M_get_key(__next->_M_val), __key)) {
         __cur->_M_next = __next->_M_next;
@@ -461,7 +499,7 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>::erase(const key_type& __key)
         __next = __cur->_M_next;
       }
     }
-    //直到while跳出后，才判断要不要删除第一个桶节点
+    // 直到while跳出后，才判断要不要删除第一个桶节点
     if (_M_equals(_M_get_key(__first->_M_val), __key)) {
       _M_buckets[__n] = __first->_M_next;
       _M_delete_node(__first);

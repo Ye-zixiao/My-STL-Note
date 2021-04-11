@@ -54,7 +54,7 @@ protected:
 
 然后我们真正使用的vector会继承这个_Vector_base基类。通过观察现如今版本的g++实现，你可以发现目前的vector实现仍然保持着这种继承结构，且\_Vector_base这个基类负责的工作更加多。
 
-在源代码中你还会发现在SGI STL V3.3版本中，vector的迭代器实际上就是指向容器元素的原始指针，SGI STL并没有对其进行类封装。但如果观察当前g++对vector迭代器的实现就进行了类封装，只不过这个具体迭代器不仅仅只能服务于vector，其名为：`__gnu_cxx::__normal_iterator<pointer, vector>`。
+在源代码中你还会发现在SGI STL V3.3版本中，vector的迭代器实际上就是指向容器元素的原始指针，SGI STL并没有对其进行类封装。但如果观察当前g++对vector迭代器的实现就进行了类封装，只不过这个具体迭代器不仅仅只能服务于vector，其名为：`__gnu_cxx::__normal_iterator<pointer, vector>`，但实际看好下去好像还是原始指针！
 
 ```c++
 //__STL_DEFAULT_ALLOCATOR(_Tp)就是alloc<_Tp>
@@ -86,7 +86,7 @@ public:
 };
 ```
 
-当vector创建之后其所使用的内存空间就是一个简单的连续线性空间，在其已分配的空间中主要分成两个部分：①已使用空间，这部分空间已经存储了我们添加的元素，内存范围为[\_M_start,\ _M_finish)；②备用空间，为下一次添加元素提供空间以避免每一次都需要分配空间的尴尬，内存范围为[\_M_finish, _M_end_of_storage)。大致结构如下图所示：
+当vector创建之后其所使用的内存空间就是一个简单的连续线性空间，在其已分配的空间中主要分成两个部分：①已使用空间，这部分空间已经存储了我们添加的元素，内存范围为[\_M_start,\_M_finish)；②备用空间，为下一次添加元素提供空间以避免每一次都需要分配空间的尴尬，内存范围为[\_M_finish, _M_end_of_storage)。大致结构如下图所示：
 
 <img src="../../image/屏幕截图 2021-01-05 094556.png" alt="屏幕截图 2021-01-05 094556" style="zoom:65%;" />
 
@@ -94,7 +94,7 @@ public:
 
 #### 4.1.2 vector的构造/析构过程
 
-vector的构造函数在《STL源码剖析》所使用的源码和我所阅读的V3.3版本中的构造函数有许多不同之处，但可以说两者实质上的构造过程并没有什么太多的不同，它们都会经历如下3个步骤：①allocate--->②fill--->③initialize。
+vector的构造函数在《STL源码剖析》所使用的源码和我所阅读的V3.3版本中的构造函数有许多不同之处，但可以说两者实质上的构造过程并没有什么太多的不同，它们都会经历如下3个步骤：**①allocate--->②fill--->③initialize**。
 
 其中allocate指的是构造函数先会分配指定大小空间的过程，fill指定的是构造函数在分配完空间之后会对其中的元素进行填充默认值或者指定值的过程，initialize指的是构造函数对\_M_start、\_M_finish、\_M_end_of_storage等类对象中仅定义的数据成员修正赋值的过程。其中在V3.3的版本中，vector的allocate内存分配是由基类\_Vector_base完成，fill、copy的工作由派生类vector完成，而initialize初始化数据成员的过程是由基类\_Vector_base完成。
 
@@ -108,11 +108,11 @@ public:
 
   _Vector_base(const _Alloc&)
     : _M_start(0), _M_finish(0), _M_end_of_storage(0) {}
-  /* 仅仅分配内存空间，并填充也不初始化 */
+  /* 仅仅分配内存空间，不填充也不初始化 */
   _Vector_base(size_t __n, const _Alloc&)
     : _M_start(0), _M_finish(0), _M_end_of_storage(0) 
   {
-    //1、分配空间、初始化数据成员（相关指针）
+    // 1、分配空间、初始化数据成员（相关指针）
     _M_start = _M_allocate(__n);
     _M_finish = _M_start;
     _M_end_of_storage = _M_start + __n;
@@ -132,7 +132,7 @@ protected:
     { _M_data_allocator::deallocate(__p, __n); }
 };
 
-//派生类vector部分：
+// 派生类vector部分：
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
 class vector : protected _Vector_base<_Tp, _Alloc> 
 {
@@ -143,7 +143,7 @@ class vector : protected _Vector_base<_Tp, _Alloc>
   vector(size_type __n, const _Tp& __value,
          const allocator_type& __a = allocator_type()) 
     : _Base(__n, __a)
-    //2、fill填充
+    // 2、fill填充
     { _M_finish = uninitialized_fill_n(_M_start, __n, __value); }
 
   explicit vector(size_type __n)
@@ -152,6 +152,7 @@ class vector : protected _Vector_base<_Tp, _Alloc>
 
   vector(const vector<_Tp, _Alloc>& __x) 
     : _Base(__x.size(), __x.get_allocator())
+    // 拷贝
     { _M_finish = uninitialized_copy(__x.begin(), __x.end(), _M_start); }
 ```
 
@@ -190,10 +191,10 @@ vector<_Tp, _Alloc>::_M_insert_aux(iterator __position, const _Tp& __x)
   else {
     const size_type __old_size = size();
     const size_type __len = __old_size != 0 ? 2 * __old_size : 1;
-    //1、分配新的空间
+    // 1、分配新的空间
     iterator __new_start = _M_allocate(__len);
     iterator __new_finish = __new_start;
-    //2、拷贝原空间数据到新空间
+    // 2、拷贝原空间数据到新空间
     __STL_TRY {
       __new_finish = uninitialized_copy(_M_start, __position, __new_start);
       construct(__new_finish, __x);
@@ -202,10 +203,10 @@ vector<_Tp, _Alloc>::_M_insert_aux(iterator __position, const _Tp& __x)
     }
     __STL_UNWIND((destroy(__new_start,__new_finish), 
                   _M_deallocate(__new_start,__len)));
-    //3、析构+销毁原空间
+    // 3、析构+销毁原空间
     destroy(begin(), end());
     _M_deallocate(_M_start, _M_end_of_storage - _M_start);
-    //4、更新指针数据
+    // 4、更新指针数据
     _M_start = __new_start;
     _M_finish = __new_finish;
     _M_end_of_storage = __new_start + __len;
@@ -248,8 +249,10 @@ void vector<_Tp, _Alloc>::_M_fill_insert(iterator __position, size_type __n,
         赋值运算符而实现的，因此它必然要求被拷贝的元素在算法执行前已经被初始
         化了。因而造成了如下的if-else */
       if (__elems_after > __n) {
+        // 1、拷贝后面的元素到未初始化的内存上
         uninitialized_copy(_M_finish - __n, _M_finish, _M_finish);
         _M_finish += __n;
+        // 2、拷贝较后面的元素到已初始化的内存上
         copy_backward(__position, __old_finish - __n, __old_finish);
         fill(__position, __position + __n, __x_copy);
       }
@@ -261,7 +264,7 @@ void vector<_Tp, _Alloc>::_M_fill_insert(iterator __position, size_type __n,
         fill(__position, __old_finish, __x_copy);
       }
     }
-    /* 备用空间不够 */
+    /* 备用空间不够，这种情况下的处理方式较简单 */
     else {
       const size_type __old_size = size();        
       const size_type __len = __old_size + max(__old_size, __n);
@@ -282,7 +285,6 @@ void vector<_Tp, _Alloc>::_M_fill_insert(iterator __position, size_type __n,
       _M_end_of_storage = __new_start + __len;
     }
   }
-  //若__n==0则什么也不干
 }
 ```
 
@@ -330,7 +332,7 @@ list的实现位于源文件[stl_list.h](stl_list.h)，其中比较需要关注�
 
 > 至于list到底支持哪些操作，可以通过访问https://zh.cppreference.com/w/cpp/container/list来查看。
 
-文件[list_test.cpp](list_test.cpp)大致实现了list的一些功能，该文件仅仅做展示作用。需要注意的是在这种模板+继承的C++编程中需要特别注意模板派生类使用模板基类名字的一个问题：**若模板派生类需要使用模板基类的名字时，则编译器会因为默认情况下不进入基类的作用域查找该名字而使得派生类无法直接使用模板基类的名字**（包括成员类型、成员函数）。这一点在《effective C++》中的第43条有着详细的说明。
+文件[list_test.cpp](list_test.cpp)大致实现了list的一些功能，该文件仅仅做展示作用。需要注意的是在这种模板+继承的C++编程中需要特别注意模板派生类使用模板基类名字的一个问题：**若模板派生类需要使用模板基类的名字时，则编译器会因为默认情况下不进入基类的作用域查找该名字而使得派生类无法直接使用模板基类的名字**（包括成员类型、成员函数）。这一点在《*effective C++*》中的第43条有着详细的说明。
 
 
 
@@ -356,18 +358,18 @@ struct _List_node : public _List_node_base {
   _Tp _M_data;
 };
 
-//迭代器实现
 template <class _Tp>
 struct _List_node : public _List_node_base {
   _Tp _M_data;
 };
 
+// 迭代器实现
 struct _List_iterator_base {
   typedef size_t                     size_type;
   typedef ptrdiff_t                  difference_type;
   typedef bidirectional_iterator_tag iterator_category;
 
-  //这个_M_node是直接公开的，即使是现如今g++也是怎么做的
+  // 这个_M_node是直接公开的，即使是现如今g++也是怎么做的
   _List_node_base* _M_node;
 
   _List_iterator_base(_List_node_base* __x) : _M_node(__x) {}
@@ -541,16 +543,17 @@ _List_base<_Tp,_Alloc>::clear()
 在正式介绍list元素结点的插入和删除操作实现之前，我们首先需要看一下list的结点是如何实现分配、构造初始化、析构和销毁的。其中结点空间的分配和销毁是在基类\_List_base中得到实现的，而结点的构造初始化是在派生类list中实现的，且是在基类中空间分配函数的基础上完成的。而结点的析构在SGI STL V3.3版本中并没有对应的操作，因为它实际上完全可以用STL算法`destroy()`和基类`_M_put_node()`间接完成，这并不是什么大问题。
 
 ```c++
-//_List_base基类中：
+// _List_base基类中：
 protected:
   typedef simple_alloc<_List_node<_Tp>, _Alloc> _Alloc_type;
-  //使用空间分配器分配出一个链表结点的空间
+  // 使用空间分配器分配出一个链表结点的空间
   _List_node<_Tp>* _M_get_node() { return _Alloc_type::allocate(1); }
-  //使用空间分配器销毁指定结点的空间
+  // 使用空间分配器销毁指定结点的空间
   void _M_put_node(_List_node<_Tp>* __p) { _Alloc_type::deallocate(__p, 1); } 
 
-//list类中：
+// list类中：
 protected:
+  // 构造一个list结点
   _Node* _M_create_node(const _Tp& __x)
   {
     _Node* __p = _M_get_node();
@@ -588,7 +591,7 @@ iterator insert(iterator __position, const _Tp& __x) {
     return __tmp;
 }
 
-//范围元素插入
+// 范围元素插入
 template <class _Tp, class _Alloc>
 void 
 list<_Tp, _Alloc>::insert(iterator __position, 
@@ -598,7 +601,7 @@ list<_Tp, _Alloc>::insert(iterator __position,
         insert(__position, *__first);
 }
 
-//push_back的实现
+// push_back的实现
 void push_back(const _Tp& __x) { insert(end(), __x); }
 ```
 
@@ -627,7 +630,7 @@ iterator erase(iterator __position) {
 
 ##### 4.2.5.1 元素迁移操作
 
-元素迁移操作可以认为是一种比较特殊的插入操作，因为它插入的不是新的链表结点元素，而是从链表一个位置上截下一段然后插入到当前链表或者另一个链表上的指定位置上。因此它最直观的就有两个步骤：①将指定的链表结点（串链）从原始的链表中截取下来，②然后将其插入到指定链表的某个位置上。但实际实现时，它一般是一边截取一边插入（调整相关的指针），如下图所示：
+元素迁移操作可以认为是一种比较特殊的插入操作，因为它插入的不是新的链表结点元素，而是从链表一个位置上截下一段然后插入到当前链表或者另一个链表上的指定位置上。因此它最直观的就有两个步骤：①将指定的链表结点（串链）从原始的链表中截取下来，②然后将其插入到指定链表的某个位置上。但实际实现时，它一般是一边截取一边插入（调整相关的指针）所以看起源码来有点😵。如下图所示：
 
 <img src="../../image/屏幕截图 2021-01-09 192617.png" alt="屏幕截图 2021-01-09 192617" style="zoom:80%;" />
 
@@ -656,7 +659,7 @@ protected:
 链表list中的元素迁移操作是list中很多操作实现的重要前提，因为向双链表中的结点提供了一个非常灵活的移动能力。通过`transfer()`操作我们可以很好的实现链表拼接操作`splice()`、链表的有序归并操作`merge()`，以及基于有序归并实现的双链表归并算法`sort()`。
 
 ```c++
-//双链表拼接splice实现：
+// 双链表拼接splice实现：
 public:
   void splice(iterator __position, list& __x) {
     if (!__x.empty()) 
@@ -665,6 +668,7 @@ public:
   void splice(iterator __position, list&, iterator __i) {
     iterator __j = __i;
     ++__j;
+    // 若i后面的结点就是position，则说明没必要移动
     if (__position == __i || __position == __j) return;
     this->transfer(__position, __i, __j);
   }
@@ -673,7 +677,7 @@ public:
       this->transfer(__position, __first, __last);
   }
 
-//两个有序链表的归并merge实现：
+// 两个有序链表的归并merge实现：
 template <class _Tp, class _Alloc>
 void list<_Tp, _Alloc>::merge(list<_Tp, _Alloc>& __x)
 {
@@ -691,7 +695,7 @@ void list<_Tp, _Alloc>::merge(list<_Tp, _Alloc>& __x)
     }
     else
       ++__first1;
-  //若链表__x经上面的遍历后还有剩余，则将剩余的结点串链插入到当前链表的末尾
+  // 若链表__x经上面的遍历后还有剩余，则将剩余的结点串链插入到当前链表的末尾
   if (__first2 != __last2) transfer(__last1, __first2, __last2);
 }
 
@@ -715,11 +719,11 @@ inline void list<_Tp, _Alloc>::reverse()
 
 
 
-双链表list的排序实现其实就是一种典型的自底向上归并排序（《STL源码剖析》声称其采用了快速排序，这是错误的）。
+双链表list的排序实现其实就是一种典型的自底向上归并排序（《STL源码剖析》声称其采用了快速排序，我觉得是错误的❌！）。
 
 在排序前，它会生成一个用作临时存放元素的链表\_\_carry（为什么概念上将其归为临时呢？因为它并不会记录上一轮存放进入的结点元素，而后面64个好歹会），以及64个辅助存放链表（这意味着它最高允许将归并的层数达到64层）。
 
-当排序开始后，它每一次迭代都会从源链表中剪下一个结点，若\_\__counter[0]有元素存在，则它和当前读入结点元素进行有序归并；归并后若发现下一层的\_\_counter[1]也存在元素，则\_\_counter[1]会继续和它进行归并；此次贵宾后若仍然发现下一层的\_\_counter[2]也存在元素，则继续归并。。。。直到归并到有一层的下一层不再存在元素。当最外面的while循环结束后，辅助存放链表\_\_counter[]中会有部分链表仍然存放一些链表有序片段，还有些则没有，所以我们需要从0到63逐次归并到\_\_counter[63]，然后交换会当前链表中，这样我们就完成了整个排序过程。说了这么多，不如来一个图示清楚：
+当排序开始后，它每一次迭代都会从源链表中剪下一个结点，若\_\__counter[0]有元素存在，则它和当前读入结点元素进行有序归并；归并后若发现下一层的\_\_counter[1]也存在元素，则\_\_counter[1]会继续和它进行归并；此次归并后若仍然发现下一层的\_\_counter[2]也存在元素，则继续归并。。。。直到归并到有一层的下一层不再存在元素。当最外面的while循环结束后，辅助存放链表\_\_counter[]中会有部分链表仍然存放一些链表有序片段，还有些则没有，所以我们需要从0到\_\_fill逐次归并到\_\_counter[\_\_fill]，然后交换回当前链表中，这样我们就完成了整个排序过程。说了这么多，不如来一个图示清楚：
 
 <img src="../../image/mergesort.jpg" alt="mergesort" style="zoom: 50%;" />
 
@@ -734,12 +738,17 @@ void list<_Tp, _Alloc>::sort()
     int __fill = 0;
       
     while (!empty()) {
+      // 先迁移到临时链表__carry中
       __carry.splice(__carry.begin(), *this, begin());
+        
       int __i = 0;
       while(__i < __fill && !__counter[__i].empty()) {
+        // 若__counter[__i]链表中有元素，则将carry与之归并
         __counter[__i].merge(__carry);
+        // 然后又交换到carry中
         __carry.swap(__counter[__i++]);
       }
+      // 最后归并到一个空的counter[__i]链表中
       __carry.swap(__counter[__i]);         
       if (__i == __fill) ++__fill;
     } 
@@ -794,10 +803,10 @@ public:
   /* ... */
 
 protected:
-  _Tp** _M_map;       //指向缓冲区图（一个指针数组）
-  size_t _M_map_size; //当前已分配缓冲区的数量
-  iterator _M_start;  //指向deque中的第一个有效元素
-  iterator _M_finish; //指向deque中的最后一个有效元素
+  _Tp** _M_map;       // 指向缓冲区图（一个指针数组）
+  size_t _M_map_size; // 当前已分配缓冲区的数量
+  iterator _M_start;  // 指向deque中的第一个有效元素
+  iterator _M_finish; // 指向deque中的最后一个有效元素
 
   typedef simple_alloc<_Tp, _Alloc>  _Node_alloc_type;
   typedef simple_alloc<_Tp*, _Alloc> _Map_alloc_type;
@@ -809,14 +818,14 @@ protected:
 用户真正使用的deque双向队列通过继承上面的基类，并在其中实现绝大多数的双向队列操作：
 
 ```c++
-//可以看到现在的deque并不能像早先的deque那样设置bufsize
+// 可以看到现在的deque并不能像早先的deque那样设置bufsize
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
 class deque : protected _Deque_base<_Tp, _Alloc> {
   /* ... */
 };
 ```
 
-我们可以从上面的代码看到，deque之所以能够很好的支持前后端原书添加和删除操作，是因为**deque它不像vector那样只维护一个连续的内存缓冲区，而是通过一个缓冲区指针数组**（因为代码中记为map，所以我称之为缓冲区图或者缓冲区指针图）**来维护多个连续的内存缓冲区**。当前向插入时发现缓冲区不足时，就会分配新的缓冲区并将其地址赋给map中有效指针元素前面元素，以此达到扩展内存缓冲区的目的。向后添加元素时发现缓冲区不足也是同样的道理。因此实现deque最大的难点就在于处理不连续的缓冲区。
+我们可以从上面的代码看到，deque之所以能够很好的支持前后端元素添加和删除操作，是因为**deque它不像vector那样只维护一个连续的内存缓冲区，而是通过一个缓冲区指针数组**（因为代码中记为map，所以我称之为缓冲区图或者缓冲区指针图）**来维护多个连续的内存缓冲区**。当前向插入时发现缓冲区不足时，就会分配新的缓冲区并将其地址赋给map中有效指针元素前面元素，以此达到扩展内存缓冲区的目的。向后添加元素时发现缓冲区不足也是同样的道理。因此实现deque最大的难点就在于处理不连续的缓冲区。
 
 <img src="../../image/屏幕截图 2021-01-10 115229.png" alt="屏幕截图 2021-01-10 115229" style="zoom: 67%;" />
 
@@ -837,6 +846,7 @@ template <class _Tp, class _Ref, class _Ptr>
 struct _Deque_iterator {
   typedef _Deque_iterator<_Tp, _Tp&, _Tp*>             iterator;
   typedef _Deque_iterator<_Tp, const _Tp&, const _Tp*> const_iterator;
+  // deque的缓冲区大小是固定的，具体点应该是缓冲区中可容纳的结点数量是固定的
   static size_t _S_buffer_size() { return __deque_buf_size(sizeof(_Tp)); }
 
   typedef random_access_iterator_tag iterator_category;
@@ -849,10 +859,10 @@ struct _Deque_iterator {
 
   typedef _Deque_iterator _Self;
 
-  _Tp* _M_cur;          //指向当前元素
-  _Tp* _M_first;        //当前缓冲区起始
-  _Tp* _M_last;         //当前缓冲区尾后
-  _Map_pointer _M_node; //指向缓冲区图map中指向当前缓冲区指针的指针
+  _Tp* _M_cur;          // 指向当前元素
+  _Tp* _M_first;        // 当前缓冲区起始
+  _Tp* _M_last;         // 当前缓冲区尾后
+  _Map_pointer _M_node; // 指向缓冲区图map中指向当前缓冲区指针的指针
     
   _Deque_iterator(_Tp* __x, _Map_pointer __y) 
     : _M_cur(__x), _M_first(*__y),
@@ -866,7 +876,7 @@ struct _Deque_iterator {
 };
 ```
 
-deque迭代器最重要的工作就是将各种各样与指针操作相关的运算符进行重载，其中最为关键的几个运算符应该是`++`、`--`、`+=`这些。重载这些运算符都会借助到一个名为`_M_set_node()`的辅助成员函数，它的职责就是不仅map node指针，然后依此更新first、last成员。
+deque迭代器最重要的工作就是将各种各样与指针操作相关的运算符进行重载，其中最为关键的几个运算符应该是`++`、`--`、`+=`这些。重载这些运算符都会借助到一个名为`_M_set_node()`的辅助成员函数，它的职责就是不仅更新map node指针，然后依此更新first、last成员。
 
 ```c++
   void _M_set_node(_Map_pointer __new_node) {
@@ -923,7 +933,7 @@ public:
   _Deque_base(const allocator_type&, size_t __num_elements)
     : _M_map(0), _M_map_size(0),  _M_start(), _M_finish() {
     _M_initialize_map(__num_elements);
-    //完成基类构造函数后，deque基本成型，但里面的元素还没有被构造
+    // 完成基类构造函数后，deque基本成型，但里面的元素还没有被构造
   }
   /* ... */
 };
@@ -932,15 +942,15 @@ template <class _Tp, class _Alloc>
 void
 _Deque_base<_Tp,_Alloc>::_M_initialize_map(size_t __num_elements)
 {
-  //1、计算deque需要用到几个缓冲区，其中一定有一个多余的备用缓冲区
+  // 1、计算deque需要用到几个缓冲区，其中一定有一个多余的备用缓冲区
   size_t __num_nodes = 
     __num_elements / __deque_buf_size(sizeof(_Tp)) + 1;
 
-  //2、默认最少也会分配出大小为8的缓冲区指针数组
+  // 2、默认最少也会分配出大小为8的缓冲区指针数组
   _M_map_size = max((size_t) _S_initial_map_size, __num_nodes + 2);
   _M_map = _M_allocate_map(_M_map_size);
 
-  //3、使nstart和nfinish指向map（位图）中的最中央的位置
+  // 3、使nstart和nfinish指向map（位图）中的最中央的位置
   _Tp** __nstart = _M_map + (_M_map_size - __num_nodes) / 2;
   _Tp** __nfinish = __nstart + __num_nodes;
 
@@ -954,10 +964,10 @@ _Deque_base<_Tp,_Alloc>::_M_initialize_map(size_t __num_elements)
   }
   __STL_UNWIND((_M_deallocate_map(_M_map, _M_map_size), 
                 _M_map = 0, _M_map_size = 0));
-  //5、更新start、finish迭代器的first、last、node成员
+  // 5、更新start、finish迭代器的first、last、node成员
   _M_start._M_set_node(__nstart);
   _M_finish._M_set_node(__nfinish - 1);
-  //6、更新start、finish迭代器的当前指向元素指针cur
+  // 6、更新start、finish迭代器的当前指向元素指针cur
   _M_start._M_cur = _M_start._M_first;
   _M_finish._M_cur = _M_finish._M_first +
                __num_elements % __deque_buf_size(sizeof(_Tp));
@@ -971,10 +981,10 @@ template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
 class deque : protected _Deque_base<_Tp, _Alloc> {
     /* ... */
 public:                         // Constructor, destructor.
-  //默认构造
+  // 默认构造
   explicit deque(const allocator_type& __a = allocator_type()) 
     : _Base(__a, 0) {}
-  //范围元素填充构造
+  // 范围元素填充构造
   deque(size_type __n, const value_type& __value,
         const allocator_type& __a = allocator_type()) : _Base(__a, __n)
     { _M_fill_initialize(__value); }
@@ -985,10 +995,10 @@ template <class _Tp, class _Alloc>
 void deque<_Tp,_Alloc>::_M_fill_initialize(const value_type& __value) {
   _Map_pointer __cur;
   __STL_TRY {
-    //逐个缓冲区进行填充
+    // 逐个缓冲区进行填充
     for (__cur = _M_start._M_node; __cur < _M_finish._M_node; ++__cur)
       uninitialized_fill(*__cur, *__cur + _S_buffer_size(), __value);
-    //因为最后一个缓冲区可能并不是所有的元素都有效，所以只需要对部分进行填充
+    // 因为最后一个缓冲区可能并不是所有的元素都有效，所以只需要对部分进行填充
     uninitialized_fill(_M_finish._M_first, _M_finish._M_cur, __value);
   }
   __STL_UNWIND(destroy(_M_start, iterator(*__cur, __cur)));
@@ -1023,7 +1033,7 @@ class deque : protected _Deque_base<_Tp, _Alloc> {
   /* ... */
 protected:                      // Allocation of _M_map and nodes
   void _M_reserve_map_at_back (size_type __nodes_to_add = 1) {
-    //若map（缓冲区图在_M_finish之后没有剩余空间，则需要重新分配缓冲区图）
+    // 若map（缓冲区图在_M_finish之后没有剩余空间，则需要重新分配缓冲区图）
     if (__nodes_to_add + 1 > _M_map_size - (_M_finish._M_node - _M_map))
       _M_reallocate_map(__nodes_to_add, false);
   }
@@ -1055,7 +1065,7 @@ void deque<_Tp,_Alloc>::_M_reallocate_map(size_type __nodes_to_add,
                     __new_nstart + __old_num_nodes);
   }
   else {
-      //否则重新分配map图
+      // 否则重新分配map图
     size_type __new_map_size = 
       _M_map_size + max(_M_map_size, __nodes_to_add) + 2;
 
@@ -1122,7 +1132,7 @@ public:                         // push_* and pop_*
 template <class _Tp, class _Alloc>
 void deque<_Tp,_Alloc>::_M_push_back_aux()
 {
-  _M_reserve_map_at_back();//保证缓冲区图map后面的空间足够
+  _M_reserve_map_at_back();// 保证缓冲区图map后面的空间足够
   *(_M_finish._M_node + 1) = _M_allocate_node();
   __STL_TRY {
     construct(_M_finish._M_cur);
@@ -1197,7 +1207,7 @@ deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos)
     ++__pos1;
     copy(__front2, __pos1, __front1);
   }
-  //若插入点后面的元素数量较多
+  // 若插入点后面的元素数量较多
   else {
     push_back(back());
     iterator __back1 = _M_finish;
@@ -1216,7 +1226,7 @@ deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos)
 
 ###### 4.3.4.4.2 任意多元素插入
 
-相比于之前任意单元素的插入，任意多元素的插入可以说是比较复杂，但其实原理的和上面的单元素插入是一样的。①首先同样的，它会处理两种特殊的情况——前端或后端插入多个元素，那么它会先计算并准备好指定数量的元素空间，不够就分配新的缓冲区，然后构造每一个元素。②若是在内部进行插入，它同样的会区分出插入的位置是靠前还是靠后，若是靠前则在最前面计算并准备好指定数量的元素空间，然后将插入位置前面向前移动插入元素数量的步数，最后以赋值的方式插入多个元素（在这里其实有很多的细节需要考虑，具体看源代码）；③靠后略。
+相比于之前任意单元素的插入，任意多元素的插入可以说是比较复杂的，但其实原理的和上面的单元素插入是一样的。①首先同样的，它会处理两种特殊的情况——前端或后端插入多个元素，那么它会先计算并准备好指定数量的元素空间，不够就分配新的缓冲区，然后构造每一个元素。②**若是在内部进行插入，它同样的会区分出插入的位置是靠前还是靠后，若是靠前则在最前面计算并准备好指定数量的元素空间，然后将插入位置前面向前移动插入元素数量的步数，最后以赋值的方式插入多个元素**（在这里其实有很多的细节需要考虑，具体看源代码）；③靠后略。
 
 ```c++
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
@@ -1228,12 +1238,12 @@ public:
   /* ... */
 };
 
-//在指定迭代器前面填充式插入多个元素
+// 在指定迭代器前面填充式插入多个元素
 template <class _Tp, class _Alloc>
 void deque<_Tp, _Alloc>::_M_fill_insert(iterator __pos,
                                         size_type __n, const value_type& __x)
 {
-  //若是在最前面插入
+  // 若是在最前面插入
   if (__pos._M_cur == _M_start._M_cur) {
     iterator __new_start = _M_reserve_elements_at_front(__n);
     __STL_TRY {
@@ -1242,7 +1252,7 @@ void deque<_Tp, _Alloc>::_M_fill_insert(iterator __pos,
     }
     __STL_UNWIND(_M_destroy_nodes(__new_start._M_node, _M_start._M_node));
   }
-  //若是在最后面插入
+  // 若是在最后面插入
   else if (__pos._M_cur == _M_finish._M_cur) {
     iterator __new_finish = _M_reserve_elements_at_back(__n);
     __STL_TRY {
@@ -1252,7 +1262,7 @@ void deque<_Tp, _Alloc>::_M_fill_insert(iterator __pos,
     __STL_UNWIND(_M_destroy_nodes(_M_finish._M_node + 1, 
                                   __new_finish._M_node + 1));    
   }
-  //在内部位置插入
+  // 在内部位置插入
   else 
     _M_insert_aux(__pos, __n, __x);
 }
@@ -1272,7 +1282,7 @@ void deque<_Tp,_Alloc>::_M_insert_aux(iterator __pos,
     __pos = _M_start + __elems_before;
     __STL_TRY {
       /* 若插入位置前面的元素比欲插入元素的数量还要多，那么这就需要涉及到
-      1、未初始化拷贝；2、普通拷贝；3、填充 这三个过程 */
+         1、未初始化拷贝；2、普通拷贝；3、填充 这三个过程 */
       if (__elems_before >= difference_type(__n)) {
         iterator __start_n = _M_start + difference_type(__n);
         uninitialized_copy(_M_start, __start_n, __new_start);
@@ -1326,7 +1336,7 @@ class deque : protected _Deque_base<_Tp, _Alloc> {
 protected:
   iterator _M_reserve_elements_at_back(size_type __n) {
     size_type __vacancies = (_M_finish._M_last - _M_finish._M_cur) - 1;
-    //检查当前缓冲区空间是否不足，若不足，则预分配缓冲区
+    // 检查当前缓冲区空间是否不足，若不足，则预分配缓冲区
     if (__n > __vacancies)
       _M_new_elements_at_back(__n - __vacancies);
     return _M_finish + difference_type(__n);
@@ -1339,9 +1349,10 @@ void deque<_Tp,_Alloc>::_M_new_elements_at_back(size_type __new_elems)
 {
   size_type __new_nodes
       = (__new_elems + _S_buffer_size() - 1) / _S_buffer_size();
-  _M_reserve_map_at_back(__new_nodes);//确保缓冲区图map足够
+  _M_reserve_map_at_back(__new_nodes);// 确保缓冲区图map足够
   size_type __i;
   __STL_TRY {
+    // 创建新的缓冲区
     for (__i = 1; __i <= __new_nodes; ++__i)
       *(_M_finish._M_node + __i) = _M_allocate_node();
   }
@@ -1416,7 +1427,8 @@ void deque<_Tp,_Alloc>::_M_pop_front_aux()
 template <class _Tp, class _Alloc> 
 void deque<_Tp,_Alloc>::clear()
 {
-  //将首node和尾node之间的node指向的缓冲区进行销毁
+  // 将首node和尾node之间的node指向的缓冲区进行销毁，但其中的
+  // +1已经告诉我们它会留下第一个缓冲区作为备份
   for (_Map_pointer __node = _M_start._M_node + 1;
        __node < _M_finish._M_node;
        ++__node) {
@@ -1438,7 +1450,7 @@ void deque<_Tp,_Alloc>::clear()
 
 
 
-`erase()`操作也有单元素删除和范围元素删除两种，且第一个操作需要针对①刚好前端删除；②刚好后端删除和③在内部删除这3种情况进行处理，而第二个操作则需要针对删除位置是否靠前还是靠后两种情况机型考虑，还是比较简单的。
+`erase()`操作也有单元素删除和范围元素删除两种，且第一个操作需要针对①刚好前端删除；②刚好后端删除和③在内部删除这3种情况进行处理，而第二个操作则需要针对删除位置是否靠前还是靠后两种情况进行考虑，还是比较简单的。
 
 ```c++
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
@@ -1520,7 +1532,7 @@ queue先进后出队列的实现也非常简单，就是借一个顺序容器（
 3. `pop_heap()`函数的作用就是从二叉堆中移除堆顶元素，然后重新组织二叉堆。它与`push_heap()`函数一样并没有删除容器中的元素，只不过将最大值元素放到了容器最后的位置，然后缩减二叉堆范围罢了；
 4. `sort_heap()`函数的作用就是将一个二叉堆中的元素以默认升序的方式对容器进行排列。
 
-> `push_heap()`和`pop_heap()`函数其实很好的遵守了“算法不对容器进行增删操作”的原则。至于其他二叉堆算法和具体细节可以访问https://zh.cppreference.com/w/cpp/algorithm了解。
+> `push_heap()`和`pop_heap()`函数其实很好的遵守了“算法不对容器进行增删操作”的原则，一种考量是因为通过迭代器增删元素可能会使相关的迭代器失效。至于其他二叉堆算法和具体细节可以访问https://zh.cppreference.com/w/cpp/algorithm了解。
 
 
 
@@ -1528,19 +1540,19 @@ queue先进后出队列的实现也非常简单，就是借一个顺序容器（
 
 `push_heap()`算法能够正常执行的前提是容器[\_\_first,\_\_holeIndex-1)范围内的元素已经形成二叉堆，那么将这个__holeIndex-1位置上的元素存放到容器这片范围指定位置的操作就相应的变成了二叉堆插入操作。将容器元素交换到容器的某一个位置的操作就是《*算法4*》指出的上浮`swim()`操作。
 
-在SGI STL中，上浮操作实际上是由一个名为`__push_heap()`的操作完成的，而最后元素的上浮却需要先让它的父节点、祖先节点进行下沉，从而为它在二叉堆中预留出一个空的位置。为此，它首先会将二叉堆后面第一个元素交给一个名为__value的临时变量进行存储，然后依次与它原来完全二叉树的父节点、祖先节点进行比较，让父节点、祖先节点根据大小比较结果进行下沉，当比较不再符合或者走到了容器的头部之后才停下，然后再将\_\_value值赋给这个空位，从而完成上浮swim操作。具体如下图所示：
+在SGI STL中，上浮操作实际上是由一个名为`__push_heap()`的操作完成的。而在实际中，最后元素的上浮却需要先让它的父节点、祖先节点进行下沉，从而为它在二叉堆中预留出一个空的位置。为此，它首先会将二叉堆后面第一个元素交给一个名为__value的临时变量进行存储，然后依次与它原来完全二叉树的父节点、祖先节点进行比较，让父节点、祖先节点根据大小比较结果进行下沉，当比较不再符合或者走到了容器的头部之后才停下，然后再将\_\_value值赋给这个空位，从而完成上浮swim操作。具体如下图所示：
 
 <img src="../../image/push_heap.jpg" alt="push_heap" style="zoom:50%;" />
 
 ```c++
-//执行真正的元素“插入”工作，本质就是算法4讲的上浮swim操作
+// 执行真正的元素“插入”工作，本质就是算法4讲的上浮swim操作
 template <class _RandomAccessIterator, class _Distance, class _Tp>
 void 
 __push_heap(_RandomAccessIterator __first,
             _Distance __holeIndex, _Distance __topIndex, _Tp __value)
 {
   _Distance __parent = (__holeIndex - 1) / 2;
-  //父节点、祖先节点先下沉，为插入元素预留一个空位
+  // 父节点、祖先节点先下沉，为插入元素预留一个空位
   while (__holeIndex > __topIndex && *(__first + __parent) < __value) {
     *(__first + __holeIndex) = *(__first + __parent);
     __holeIndex = __parent;
@@ -1585,6 +1597,8 @@ push_heap(_RandomAccessIterator __first, _RandomAccessIterator __last)
 2. 接着，二叉堆删除算法就会依次向下选取原堆顶元素较大的子节点、后代节点上浮，以填充堆顶元素删除后形成的空洞，这样的后果就是二叉堆中会有一个叶子节点变成空洞。
 3. 完成上述操作后，删除算法就会调用`__push_heap()`函数重新在空洞的位置插入原二叉堆的最后一个元素（这会导致二叉堆又出现元素下沉的操作）。具体如下图所示：
 
+> 后来看了下有一点困惑，暂时先不管。
+
 <img src="../../image/pop_heap.jpg" alt="pop_heap" style="zoom:50%;" />
 
 为了加深理解，我们来对比下传统的二叉堆实现（以《*算法4*》为代表）与SGI STL二叉堆的实现，我们可以发现相对于《*算法4*》的实现，SGI STL的二叉堆插入实现相对更为简单，但是元素的删除操作却变得更为复杂。当然它之所以如此设计，我认为一个很大的原因就是为了尽可能减少交换操作所带来的大量元素存取操作。
@@ -1603,22 +1617,22 @@ __adjust_heap(_RandomAccessIterator __first, _Distance __holeIndex,
 {
   _Distance __topIndex = __holeIndex;
   _Distance __secondChild = 2 * __holeIndex + 2;
-  //先让原堆顶节点的子节点、后代节点上浮
+  // 先让原堆顶节点的子节点、后代节点上浮
   while (__secondChild < __len) {
-    //若左边的兄弟结点值比当前预判的孩子结点大，那么更新下标
+    // 若左边的兄弟结点值比当前预判的孩子结点大，那么更新下标
     if (*(__first + __secondChild) < *(__first + (__secondChild - 1)))
       __secondChild--;
     *(__first + __holeIndex) = *(__first + __secondChild);
     __holeIndex = __secondChild;
     __secondChild = 2 * (__secondChild + 1);
   }
-  //若退出循环后只有左孩子，那么就让空洞元素和左孩子交换
+  // 若退出循环后只有左孩子，那么就让空洞元素和左孩子交换
   if (__secondChild == __len) {
     *(__first + __holeIndex) = *(__first + (__secondChild - 1));
     __holeIndex = __secondChild - 1;
   }
   
-  //在空洞位置为原来二叉堆的最后一个元素进行重新插入
+  // 在空洞位置为原来二叉堆的最后一个元素进行重新插入
   __push_heap(__first, __holeIndex, __topIndex, __value);
 }
 
@@ -1627,8 +1641,8 @@ inline void
 __pop_heap(_RandomAccessIterator __first, _RandomAccessIterator __last,
            _RandomAccessIterator __result, _Tp __value, _Distance*)
 {
-  //并没有删除最大值元素，仅仅将它放到容器（指定范围内）的最后位
-  //且最后一个元素也已经被记录，就是实参__value
+  // 并没有删除最大值元素，仅仅将它放到容器（指定范围内）的最后位
+  // 且最后一个元素也已经被记录，就是实参__value
   *__result = *__first;
   __adjust_heap(__first, _Distance(0), _Distance(__last - __first), __value);
 }
@@ -1638,18 +1652,15 @@ inline void
 __pop_heap_aux(_RandomAccessIterator __first, _RandomAccessIterator __last,
                _Tp*)
 {
-  __pop_heap(__first, __last - 1, __last - 1, //长度被缩减了1
+  __pop_heap(__first, __last - 1, __last - 1, // 长度被缩减了1
              _Tp(*(__last - 1)), __DISTANCE_TYPE(__first));
-             //这里的__DISTANCE_TYPE仅仅是为了模板实参推断
+             // 这里的__DISTANCE_TYPE仅仅是为了模板实参推断
 }
 
 template <class _RandomAccessIterator>
 inline void pop_heap(_RandomAccessIterator __first, 
                      _RandomAccessIterator __last)
 {
-  __STL_REQUIRES(_RandomAccessIterator, _Mutable_RandomAccessIterator);
-  __STL_REQUIRES(typename iterator_traits<_RandomAccessIterator>::value_type,
-                 _LessThanComparable);
   __pop_heap_aux(__first, __last, __VALUE_TYPE(__first));
 }
 ```
@@ -1717,6 +1728,7 @@ make_heap(_RandomAccessIterator __first, _RandomAccessIterator __last)
 
 ````c++
 template <class _Tp, 
+          // 若需要自定义指定容器的话，则必须完整的填写出container<int>之类的表达式
           class _Sequence __STL_DEPENDENT_DEFAULT_TMPL(vector<_Tp>),
           class _Compare
           __STL_DEPENDENT_DEFAULT_TMPL(less<typename _Sequence::value_type>) >
@@ -1891,7 +1903,7 @@ struct _Slist_base {
   allocator_type get_allocator() const { return allocator_type(); }
 
   _Slist_base(const allocator_type&) { _M_head._M_next = 0; }
-  ~_Slist_base() { _M_erase_after(&_M_head, 0); }//将除_M_head后面的结点全部干掉
+  ~_Slist_base() { _M_erase_after(&_M_head, 0); }// 将除_M_head后面的结点全部干掉
 
 protected:
   typedef simple_alloc<_Slist_node<_Tp>, _Alloc> _Alloc_type;
@@ -1902,10 +1914,10 @@ protected:
   _Slist_node_base* _M_erase_after(_Slist_node_base*, _Slist_node_base*);
 
 protected:
-  _Slist_node_base _M_head;//做单链表前面的哨兵结点，注意它不是指针
+  _Slist_node_base _M_head;// 做单链表前面的哨兵结点，注意它不是指针
 }; 
 
-//slist派生类
+// slist派生类
 template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
 class slist : private _Slist_base<_Tp,_Alloc>
 {
@@ -1934,7 +1946,7 @@ public:
 元素的插入操作实际上是由一个定义在外部的内联函数`__slist_make_link()`完成的，且它操纵的是结点基类指针而不是结点派生类指针。我们可以看到对于slist而言，新元素是插入在指定结点的后面而不像是普通STL顺序容器习惯那样插入在指定位置的前面。而范围（多个）元素的插入实际上是就是调用单元素插入的操作完成的，这些还是比较简单的。
 
 ```c++
-//向__prev_node后插入新的结点
+// 向__prev_node后插入新的结点
 inline _Slist_node_base*
 __slist_make_link(_Slist_node_base* __prev_node,
                   _Slist_node_base* __new_node)
@@ -1964,7 +1976,7 @@ private:
   }
   /* ... */
 public:
-  //单元素插入
+  // 单元素插入
   iterator insert_after(iterator __pos, const value_type& __x) {
     return iterator(_M_insert_after(__pos._M_node, __x));
   }
@@ -1973,7 +1985,7 @@ public:
     return insert_after(__pos, value_type());
   }
 
-  //范围（多个）元素插入
+  // 范围（多个）元素插入
   void insert_after(iterator __pos, size_type __n, const value_type& __x) {
     _M_insert_after_fill(__pos._M_node, __n, __x);
   }
@@ -1991,7 +2003,7 @@ public:
 template <class _Tp, class _Alloc> 
 struct _Slist_base {
   /* ... */
-  //单元素删除
+  // 单元素删除
   _Slist_node_base* _M_erase_after(_Slist_node_base* __pos)
   {
     _Slist_node<_Tp>* __next = (_Slist_node<_Tp>*) (__pos->_M_next);
@@ -2004,10 +2016,10 @@ struct _Slist_base {
   _Slist_node_base* _M_erase_after(_Slist_node_base*, _Slist_node_base*);
 
 protected:
-  _Slist_node_base _M_head;//做单链表前面的哨兵结点
+  _Slist_node_base _M_head;// 做单链表前面的哨兵结点
 };  
 
-//范围元素删除
+// 范围元素删除
 template <class _Tp, class _Alloc> 
 _Slist_node_base*
 _Slist_base<_Tp,_Alloc>::_M_erase_after(_Slist_node_base* __before_first,
@@ -2027,7 +2039,7 @@ template <class _Tp, class _Alloc = __STL_DEFAULT_ALLOCATOR(_Tp) >
 class slist : private _Slist_base<_Tp,_Alloc>
   /* ... */
 public:
-  //基类实现的封装
+  // 基类实现的封装
   iterator erase_after(iterator __pos) {
     return iterator((_Node*) this->_M_erase_after(__pos._M_node));
   }
@@ -2055,9 +2067,9 @@ inline void __slist_splice_after(_Slist_node_base* __pos,
   if (__pos != __before_first && __pos != __before_last) {
     _Slist_node_base* __first = __before_first->_M_next;
     _Slist_node_base* __after = __pos->_M_next;
-    //将串链从原来的链表上剔除
+    // 将串链从原来的链表上剔除
     __before_first->_M_next = __before_last->_M_next;
-    //将串链拼接到链表结点pos位置的后面
+    // 将串链拼接到链表结点pos位置的后面
     __pos->_M_next = __first;
     __before_last->_M_next = __after;
   }
@@ -2096,6 +2108,8 @@ public:
   /* ... */
 };
 ```
+
+> 注意❗：slist的`splice_after()`要求使用者提供的是前一个节点的迭代器！
 
 
 

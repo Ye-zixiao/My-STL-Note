@@ -4,7 +4,7 @@
 
 #### 2.1.1 分配器纵览
 
-在SGI STL的实现中主要有如下几个空间分配器（我们值得关注的）：
+在SGI STL的实现中主要有如下几个空间分配器我们值得关注的：
 
 |                          分配器名称                          |                实现文件                |
 | :----------------------------------------------------------: | :------------------------------------: |
@@ -79,6 +79,16 @@ template <class _ForwardIterator>
 inline void _Destroy(_ForwardIterator __first, _ForwardIterator __last) {
   __destroy(__first, __last, __VALUE_TYPE(__first));
 }
+
+template <class _Tp>
+inline void destroy(_Tp* __pointer) {
+  _Destroy(__pointer);
+}
+
+template <class _ForwardIterator>
+inline void destroy(_ForwardIterator __first, _ForwardIterator __last) {
+  _Destroy(__first, __last);
+}
 ```
 
 <img src="../../image/屏幕截图 2020-12-27 102652.png" alt="屏幕截图 2020-12-27 102652" style="zoom:80%;" />
@@ -89,7 +99,7 @@ inline void _Destroy(_ForwardIterator __first, _ForwardIterator __last) {
 
 在上面我们已经指出一级空间分配器的实现是由`malloc`、`free`、`realloc`等函数完成，并不是用`::operator new`、`::operator delete`等函数完成，虽然不支持`set_new_handler()`，但引入了一个`set_malloc_handler()`以处理空间分配意外情况。
 
-这个第一级空间分配器大约在源代码文件[stl_lloc.h](stl_alloc.h)的109行。
+这个第一级空间分配器大约在源代码文件[stl_lloc.h](stl_alloc.h)的109行，代码比较简单。
 
 
 
@@ -99,7 +109,7 @@ inline void _Destroy(_ForwardIterator __first, _ForwardIterator __last) {
 
 上面提到，二级空间分配器针对索要不同空间采取了不同的策略，对于大于128字节的空间分配直接调用`__malloc_alloc_template`来完成；而对于小于128字节空间的索取使用了内存池来实现。这里内存池的本质就是一个使用指针串起来的内存块链表free-list，每一个链表节点既是一个完整的空间也是指针（即下面通过union定义出的嵌套类`_Obj`），每一个节点空间大小为8的倍数（8、16、24...120、128），即使用户需要的不是8的倍数也会上取整，然后分配器会为每一个不同大小的内存池链表维护一个链表指针数组，分别指向不同链表的起点。
 
-当用户需要时二级空间分配器会从其中取出一个节点删除，将这节点的空间作为自己的所需返回；当不需要时，将这个空间（重解释成链表节点）插回到内存池链表的头部。如果内存池空间不足，二级分配器还会通过`malloc`分配出更多的空间（这个空间为$2\times所需单元空间（被上取整过）$余，这一点也是有深意的）添加到链表中。
+当用户需要时，二级空间分配器会从其中取出一个节点删除，将这节点的空间作为自己的所需返回；当不需要时，将这个空间（重解释成链表节点）插回到内存池链表的头部。如果内存池空间不足，二级分配器还会通过`malloc`分配出更多的空间（这个空间为$2\times所需单元空间（被上取整过）$余，这一点也是有深意的）添加到链表中。
 
 对于这部分的实现我们需要关注如下几个静态成员函数的实现：
 
@@ -111,13 +121,6 @@ inline void _Destroy(_ForwardIterator __first, _ForwardIterator __last) {
 | **`_S_chunk_alloc()`** |  负责当free-list链表空时从内存池中取出一些空间组建新的串链   |
 
 ```c++
-#if defined(__SUNPRO_CC) || defined(__GNUC__)
-// breaks if we make these template class members:
-  enum {_ALIGN = 8};
-  enum {_MAX_BYTES = 128};
-  enum {_NFREELISTS = 16}; // _MAX_BYTES/_ALIGN
-#endif
-
 template <bool threads, int inst>
 class __default_alloc_template {
 
@@ -127,7 +130,7 @@ private:
     { return (((__bytes) + (size_t) _ALIGN-1) & ~((size_t) _ALIGN - 1)); }
 
 __PRIVATE:
-  //定义free-list空闲动态内存链表节点
+  // 定义free-list空闲动态内存链表节点
   union _Obj {
         union _Obj* _M_free_list_link;
         char _M_client_data[1];
@@ -137,20 +140,20 @@ private:
     static _Obj* __STL_VOLATILE _S_free_list[]; 
         // Specifying a size results in duplicate def for 4.1
 # else
-    //free-list链表首结点指针数组
+    // free-list链表首结点指针数组
     static _Obj* __STL_VOLATILE _S_free_list[_NFREELISTS]; 
 # endif
-  //根据所需内存大小，决定使用上述free-list数组中的哪一个元素（链表）
+  // 根据所需内存大小，决定使用上述free-list数组中的哪一个元素（链表）
   static  size_t _S_freelist_index(size_t __bytes) {
         return (((__bytes) + (size_t)_ALIGN-1)/(size_t)_ALIGN - 1);
   }
 
-  //内存池重新填充
+  // 内存池重新填充
   static void* _S_refill(size_t __n);
-  //内存池实现的核心成员函数
+  // 内存池实现的核心成员函数
   static char* _S_chunk_alloc(size_t __size, int& __nobjs);
 
-  //定义内存池起始地址、结束地址、大小
+  // 定义内存池起始地址、结束地址、大小
   static char* _S_start_free;
   static char* _S_end_free;
   static size_t _S_heap_size;
@@ -158,6 +161,7 @@ private:
 public:
 
   /* __n must be > 0      */
+  // 内存分配
   static void* allocate(size_t __n)
   {
     void* __ret = 0;
@@ -171,10 +175,6 @@ public:
       // Acquire the lock here with a constructor call.
       // This ensures that it is released in exit or during stack
       // unwinding.
-#     ifndef _NOTHREADS
-      /*REFERENCED*/
-      _Lock __lock_instance;
-#     endif
       _Obj* __RESTRICT __result = *__my_free_list;
       if (__result == 0)
         __ret = _S_refill(_S_round_up(__n));
@@ -197,14 +197,8 @@ public:
           = _S_free_list + _S_freelist_index(__n);
       _Obj* __q = (_Obj*)__p;
 
-      // acquire lock
-#       ifndef _NOTHREADS
-      /*REFERENCED*/
-      _Lock __lock_instance;
-#       endif /* _NOTHREADS */
       __q -> _M_free_list_link = *__my_free_list;
       *__my_free_list = __q;
-      // lock is released here
     }
   }
 
@@ -214,24 +208,6 @@ public:
 
 typedef __default_alloc_template<__NODE_ALLOCATOR_THREADS, 0> alloc;
 typedef __default_alloc_template<false, 0> single_client_alloc;
-
-template <bool __threads, int __inst>
-inline bool operator==(const __default_alloc_template<__threads, __inst>&,
-                       const __default_alloc_template<__threads, __inst>&)
-{
-  return true;
-}
-
-# ifdef __STL_FUNCTION_TMPL_PARTIAL_ORDER
-template <bool __threads, int __inst>
-inline bool operator!=(const __default_alloc_template<__threads, __inst>&,
-                       const __default_alloc_template<__threads, __inst>&)
-{
-  return false;
-}
-# endif /* __STL_FUNCTION_TMPL_PARTIAL_ORDER */
-
-
 
 /* We allocate memory in large chunks in order to avoid fragmenting     */
 /* the malloc heap too much.                                            */
@@ -355,37 +331,6 @@ __default_alloc_template<threads, inst>::reallocate(void* __p,
     deallocate(__p, __old_sz);
     return(__result);
 }
-
-#ifdef __STL_THREADS
-    template <bool __threads, int __inst>
-    _STL_mutex_lock
-    __default_alloc_template<__threads, __inst>::_S_node_allocator_lock
-        __STL_MUTEX_INITIALIZER;
-#endif
-
-
-template <bool __threads, int __inst>
-char* __default_alloc_template<__threads, __inst>::_S_start_free = 0;
-
-template <bool __threads, int __inst>
-char* __default_alloc_template<__threads, __inst>::_S_end_free = 0;
-
-template <bool __threads, int __inst>
-size_t __default_alloc_template<__threads, __inst>::_S_heap_size = 0;
-
-template <bool __threads, int __inst>
-typename __default_alloc_template<__threads, __inst>::_Obj* __STL_VOLATILE
-__default_alloc_template<__threads, __inst> ::_S_free_list[
-# if defined(__SUNPRO_CC) || defined(__GNUC__) || defined(__HP_aCC)
-    _NFREELISTS
-# else
-    __default_alloc_template<__threads, __inst>::_NFREELISTS
-# endif
-] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, };
-// The 16 zeros are necessary to make version 4.1 of the SunPro
-// compiler happy.  Otherwise it appears to allocate too little
-// space for the array.
-
 ```
 
 
@@ -394,35 +339,143 @@ __default_alloc_template<__threads, __inst> ::_S_free_list[
 
 #### 2.4.1 内存分配allocate
 
-`__default_alloc_template`对内存的分配很简单，即大于128字节的空间调用`__malloc_alloc_template`来完成，小的空间则从指定大小的链表指针，然后从该内存池链表中取出一个首结点，作为新的空间。该成员函数声明如下：
+`__default_alloc_template`对内存的分配很简单，即大于128字节的空间调用`__malloc_alloc_template`来完成，小的空间则从指定大小的链表指针，然后从该内存池链表中取出一个首结点，作为新的空间。该静态成员函数如下：
 
 ```c++
-static void* allocate(size_t __n);
+  static void* allocate(size_t __n)
+  {
+    void* __ret = 0;
+
+    if (__n > (size_t) _MAX_BYTES) {
+      __ret = malloc_alloc::allocate(__n);
+    }
+    else {
+      _Obj* __STL_VOLATILE* __my_free_list
+          = _S_free_list + _S_freelist_index(__n);
+      // Acquire the lock here with a constructor call.
+      // This ensures that it is released in exit or during stack
+      // unwinding.
+      _Obj* __RESTRICT __result = *__my_free_list;
+      if (__result == 0)
+        __ret = _S_refill(_S_round_up(__n));
+      else {
+        *__my_free_list = __result -> _M_free_list_link;
+        __ret = __result;
+      }
+    }
 ```
 
 <img src="../../image/屏幕截图 2020-12-28 094532.png" alt="屏幕截图 2020-12-28 094532" style="zoom:80%;" />
 
 #### 2.4.2 free-list链表重填充refill
 
-当上述`allocate()`成员函数执行的过程中发现指定链表free-list中没有剩余的空间了，那么它就会调用下面的refill函数，其中它会调用`chunk_alloc()`成员函数从内存池中取出空间组成新的free-list串链加入到指定的free-list链表中。该成员函数声明如下：
+当上述`allocate()`成员函数执行的过程中发现指定链表free-list中没有剩余的空间了，那么它就会调用下面的refill函数，其中它会调用`chunk_alloc()`成员函数从内存池中取出空间组成新的free-list串链加入到指定的free-list链表中。该成员函数如下：
 
 ```c++
 template <bool __threads, int __inst>
 void*
-__default_alloc_template<__threads, __inst>::_S_refill(size_t __n);
+__default_alloc_template<__threads, __inst>::_S_refill(size_t __n)
+{
+    int __nobjs = 20;
+    char* __chunk = _S_chunk_alloc(__n, __nobjs);
+    _Obj* __STL_VOLATILE* __my_free_list;
+    _Obj* __result;
+    _Obj* __current_obj;
+    _Obj* __next_obj;
+    int __i;
+
+    if (1 == __nobjs) return(__chunk);
+    __my_free_list = _S_free_list + _S_freelist_index(__n);
+
+    /* Build free list in chunk */
+    // 使分配出来的空间划分成一个一个小节点，然后使用union特性将这些小节点串链起来
+      __result = (_Obj*)__chunk;
+      *__my_free_list = __next_obj = (_Obj*)(__chunk + __n);
+      for (__i = 1; ; __i++) {
+        __current_obj = __next_obj;
+        __next_obj = (_Obj*)((char*)__next_obj + __n);
+        if (__nobjs - 1 == __i) {
+            __current_obj -> _M_free_list_link = 0;
+            break;
+        } else {
+            __current_obj -> _M_free_list_link = __next_obj;
+        }
+      }
+    return(__result);
+}
 ```
 
 
 
 #### 2.4.3 内存池分配chunk_alloc
 
-`chunk_alloc()`函数的作用就是在alloc类需要用到内存池的时候从内存池中取出一部分空间给调用函数，而调用者函数会将这部分取去的空间逐渐free-list。当内存池空间不足时，它会主动调用`malloc`分配出更多的空间，有意思的地方在于它会将这个新分配空间的一部分构建成free-list，而连续分布在该部分后面的空间作为内存池存储起来，以备后续的需求。其声明如下：
+`chunk_alloc()`函数的作用就是在alloc类需要用到内存池的时候从内存池中取出一部分空间给调用函数，而调用者函数会将这部分取去的空间构建free-list。当内存池空间不足时，它会主动调用`malloc`分配出更多的空间，有意思的地方在于它会将这个新分配空间的一部分构建成free-list，而连续分布在该部分后面的空间作为内存池存储起来，以备后续的需求。该函数如下：
 
 ```c++
 template <bool __threads, int __inst>
 char*
 __default_alloc_template<__threads, __inst>::_S_chunk_alloc(size_t __size, 
                                                             int& __nobjs)
+{
+    char* __result;
+    size_t __total_bytes = __size * __nobjs;
+    size_t __bytes_left = _S_end_free - _S_start_free;
+
+    if (__bytes_left >= __total_bytes) {
+        __result = _S_start_free;
+        _S_start_free += __total_bytes;
+        return(__result);
+    } else if (__bytes_left >= __size) {
+        __nobjs = (int)(__bytes_left/__size);
+        __total_bytes = __size * __nobjs;
+        __result = _S_start_free;
+        _S_start_free += __total_bytes;
+        return(__result);
+    } else {
+        // 内存池中的剩余空间不足
+        size_t __bytes_to_get = 
+	    2 * __total_bytes + _S_round_up(_S_heap_size >> 4);
+        // Try to make use of the left-over piece.
+        if (__bytes_left > 0) {
+            _Obj* __STL_VOLATILE* __my_free_list =
+                        _S_free_list + _S_freelist_index(__bytes_left);
+
+            ((_Obj*)_S_start_free) -> _M_free_list_link = *__my_free_list;
+            *__my_free_list = (_Obj*)_S_start_free;
+        }
+        _S_start_free = (char*)malloc(__bytes_to_get);
+        if (0 == _S_start_free) {
+            size_t __i;
+            _Obj* __STL_VOLATILE* __my_free_list;
+	        _Obj* __p;
+            // Try to make do with what we have.  That can't
+            // hurt.  We do not try smaller requests, since that tends
+            // to result in disaster on multi-process machines.
+            for (__i = __size;
+                 __i <= (size_t) _MAX_BYTES;
+                 __i += (size_t) _ALIGN) {
+                __my_free_list = _S_free_list + _S_freelist_index(__i);
+                __p = *__my_free_list;
+                if (0 != __p) {
+                    *__my_free_list = __p -> _M_free_list_link;
+                    _S_start_free = (char*)__p;
+                    _S_end_free = _S_start_free + __i;
+                    return(_S_chunk_alloc(__size, __nobjs));
+                    // Any leftover piece will eventually make it to the
+                    // right free list.
+                }
+            }
+	        _S_end_free = 0;	// In case of exception.
+            _S_start_free = (char*)malloc_alloc::allocate(__bytes_to_get);
+            // This should either throw an
+            // exception or remedy the situation.  Thus we assume it
+            // succeeded.
+        }
+        _S_heap_size += __bytes_to_get;
+        _S_end_free = _S_start_free + __bytes_to_get;
+        return(_S_chunk_alloc(__size, __nobjs));
+    }
+}
 ```
 
 <img src="../../image/屏幕截图 2020-12-28 100321.png" alt="屏幕截图 2020-12-28 100321" style="zoom:80%;" />

@@ -46,7 +46,7 @@
 
 __STL_BEGIN_NAMESPACE
 
-//hash桶中的结点
+// hash桶中的结点
 template <class _Val>
 struct _Hashtable_node
 {
@@ -54,6 +54,7 @@ struct _Hashtable_node
   _Val _M_val;
 };  
 
+// 相关的类模板全部做一遍前向声明
 template <class _Val, class _Key, class _HashFcn,
           class _ExtractKey, class _EqualKey, class _Alloc = alloc>
 class hashtable;
@@ -86,8 +87,8 @@ struct _Hashtable_iterator {
   typedef _Val& reference;
   typedef _Val* pointer;
 
-  _Node* _M_cur;//指向当前的hash桶中的结点
-  _Hashtable* _M_ht;//指向hash表
+  _Node* _M_cur;// 指向当前的hash桶中的结点
+  _Hashtable* _M_ht;// 指向hash表
 
   _Hashtable_iterator(_Node* __n, _Hashtable* __tab) 
     : _M_cur(__n), _M_ht(__tab) {}
@@ -577,9 +578,9 @@ _Hashtable_iterator<_Val,_Key,_HF,_ExK,_EqK,_All>::operator++()
   const _Node* __old = _M_cur;
   _M_cur = _M_cur->_M_next;
   if (!_M_cur) {
-    //取出原来hashtable桶所在的下标
+    // 取出原来hashtable桶所在的下标
     size_type __bucket = _M_ht->_M_bkt_num(__old->_M_val);
-    //依次在hashtable紧挨着的表格中找到一个有效的表格（桶），取出其中的桶节点指针给_M_cur
+    // 依次在hashtable紧挨着的表格中找到一个有效的表格（桶），取出其中的桶节点指针给_M_cur
     while (!_M_cur && ++__bucket < _M_ht->_M_buckets.size())
       _M_cur = _M_ht->_M_buckets[__bucket];
   }
@@ -719,12 +720,12 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
   const size_type __n = _M_bkt_num(__obj);
   _Node* __first = _M_buckets[__n];
 
-  //先检查是否已经在桶中，若已存在则返回false
+  // 先检查是否已经在桶中，若已存在则返回false
   for (_Node* __cur = __first; __cur; __cur = __cur->_M_next) 
     if (_M_equals(_M_get_key(__cur->_M_val), _M_get_key(__obj)))
       return pair<iterator, bool>(iterator(__cur, this), false);
 
-  //若不存在桶中，则插入并返回true
+  // 若不存在桶中，则插入并返回true
   _Node* __tmp = _M_new_node(__obj);
   __tmp->_M_next = __first;
   _M_buckets[__n] = __tmp;
@@ -742,7 +743,7 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
 
   for (_Node* __cur = __first; __cur; __cur = __cur->_M_next) 
     if (_M_equals(_M_get_key(__cur->_M_val), _M_get_key(__obj))) {
-      //若元素之前就存在，则在其后插入
+      // 若元素之前就存在，则在其后插入
       _Node* __tmp = _M_new_node(__obj);
       __tmp->_M_next = __cur->_M_next;
       __cur->_M_next = __tmp;
@@ -750,7 +751,7 @@ hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
       return iterator(__tmp, this);
     }
 
-  //否则在桶的前头插入
+  // 否则在桶的前头插入
   _Node* __tmp = _M_new_node(__obj);
   __tmp->_M_next = __first;
   _M_buckets[__n] = __tmp;
@@ -949,7 +950,7 @@ void hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
         for (size_type __bucket = 0; __bucket < __old_n; ++__bucket) {
           _Node* __first = _M_buckets[__bucket];
           while (__first) {
-            //将旧哈希表桶中的桶节点迁移到新哈希表桶中
+            // 将旧哈希表桶中的桶节点迁移到新哈希表桶中
             size_type __new_bucket = _M_bkt_num(__first->_M_val, __n);
             _M_buckets[__bucket] = __first->_M_next;
             __first->_M_next = __tmp[__new_bucket];
@@ -957,7 +958,7 @@ void hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
             __first = _M_buckets[__bucket];          
           }
         }
-        //交换临时与原先的bucket vector
+        // 交换临时与原先的bucket vector
         _M_buckets.swap(__tmp);
       }
 #         ifdef __STL_USE_EXCEPTIONS
@@ -1039,11 +1040,11 @@ void hashtable<_Val,_Key,_HF,_Ex,_Eq,_All>
     for (size_type __i = 0; __i < __ht._M_buckets.size(); ++__i) {
       const _Node* __cur = __ht._M_buckets[__i];
       if (__cur) {
-        //拷贝ht中的一个有效桶
+        // 拷贝ht中的一个有效桶
         _Node* __copy = _M_new_node(__cur->_M_val);
         _M_buckets[__i] = __copy;
 
-        //迭代拷贝桶中的串链
+        // 迭代拷贝桶中的串链
         for (_Node* __next = __cur->_M_next; 
              __next; 
              __cur = __next, __next = __cur->_M_next) {
