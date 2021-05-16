@@ -1211,8 +1211,8 @@ inline void sort(_RandomAccessIter __first, _RandomAccessIter __last) {
     __introsort_loop(__first, __last,
                      __VALUE_TYPE(__first),
                      __lg(__last - __first) * 2);
-                   /* __lg()函数返回的值val用来告知调用的底层__introsort_loop()最多只能
-                     对序列分割val次，防止出现分割恶化的现象 */
+              /* __lg()函数返回的值val用来告知调用的底层__introsort_loop()最多只能
+                对序列分割val次，防止出现分割恶化的现象 */
     // 当由快速排序差不多将序列几近有序状态后，就调用插入排序来完成最后的收尾排序工作
     __final_insertion_sort(__first, __last);
   }

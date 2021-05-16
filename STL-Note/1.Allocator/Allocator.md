@@ -39,19 +39,19 @@ SGI STL对空间分配器的实现主要是出于性能、效率和其他多种�
 在[stl_construct.h](stl_construct.h)中我们可以看到STL算法`construct()`就是直接通过定位new的方式实现，而`destroy()`通过`__type_traits`技术，识别出调用元素/迭代器指定范围内的元素的类型，判断出它们是否是POD类型（析构、构造函数trivial可有可无，没什么用），若是则什么也不做，否则逐个调用析构函数。
 
 ```c++
-//单元素构造
+// 单元素构造
 template <class _T1, class _T2>
 inline void _Construct(_T1* __p, const _T2& __value) {
   new ((void*) __p) _T1(__value);
 }
 
-//单元素析构
+// 单元素析构
 template <class _Tp>
 inline void _Destroy(_Tp* __pointer) {
   __pointer->~_Tp();
 }
 
-//迭代器指定的范围元素集合中元素类型支持可用non-trivial析构函数
+// 迭代器指定的范围元素集合中元素类型支持可用non-trivial析构函数
 template <class _ForwardIterator>
 void
 __destroy_aux(_ForwardIterator __first, _ForwardIterator __last, __false_type)
@@ -60,7 +60,7 @@ __destroy_aux(_ForwardIterator __first, _ForwardIterator __last, __false_type)
     destroy(&*__first);
 }
 
-//迭代器指定的范围元素集合中的元素类型不支持无用trivial析构函数，则什么也不做
+// 迭代器指定的范围元素集合中的元素类型不支持无用trivial析构函数，则什么也不做
 template <class _ForwardIterator> 
 inline void __destroy_aux(_ForwardIterator, _ForwardIterator, __true_type) {}
 
@@ -333,9 +333,9 @@ __default_alloc_template<threads, inst>::reallocate(void* __p,
 }
 ```
 
-
-
 上面实现代码中有几个
+
+
 
 #### 2.4.1 内存分配allocate
 
@@ -363,9 +363,13 @@ __default_alloc_template<threads, inst>::reallocate(void* __p,
         __ret = __result;
       }
     }
+    return __ret;
+  }
 ```
 
 <img src="../../image/屏幕截图 2020-12-28 094532.png" alt="屏幕截图 2020-12-28 094532" style="zoom:80%;" />
+
+
 
 #### 2.4.2 free-list链表重填充refill
 

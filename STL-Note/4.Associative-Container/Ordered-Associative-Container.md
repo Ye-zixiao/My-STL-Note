@@ -146,6 +146,8 @@ AVL树虽然是一棵高度平衡的二叉搜索树，查找操作的时间复�
 2. **待删节点的兄弟节点是红节点**（必有子）。也即上图中的3，它可以通过旋转+变色处理转换成情况②；
 3. **待删节点的兄弟节点是有子黑节点（3-节点或者4-节点）**。也即上图中的4、5、6、7、8、9，它可以通过双旋+变色或者单旋+变色的处理完成树形调整。
 
+这里的处理无子且黑节点的想法其实很简单，就是：**尽可能让待删节点的兄弟节点（3-节点或4-节点）或者父结点（3-节点或者4-节点）捐一个节点出来替代待删节点的位置；如果真的捐不出来，例如父节点和兄弟节点都是2-节点，那么就直接让兄弟节点变色成为3-节点（类似于节点合并，或者说是让2-3-4树的高度-1）。**
+
 下面的伪代码展示了对这9种情况的处理（右边的9种情况的处理方式与之类似）：
 
 ```python
@@ -497,21 +499,21 @@ _Rb_tree<_Key,_Val,_KoV,_Compare,_Alloc>
   __top->_M_parent = __p;
  
   __STL_TRY {
-    //递归构建右子树
+    // 递归构建右子树
     if (__x->_M_right)
       __top->_M_right = _M_copy(_S_right(__x), __top);
     __p = __top;
     __x = _S_left(__x);
 
-    //若左子树存在
+    // 若左子树存在
     while (__x != 0) {
       _Link_type __y = _M_clone_node(__x);
       __p->_M_left = __y;
       __y->_M_parent = __p;
-      //递归构建当前结点的右子树
+      // 递归构建当前结点的右子树
       if (__x->_M_right)
         __y->_M_right = _M_copy(_S_right(__x), __y);
-      //然后继续向左走
+      // 然后继续向左走
       __p = __y;
       __x = _S_left(__x);
     }
@@ -647,7 +649,7 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
 
 ##### 5.2.4.4 实际插入操作
 
-实际的插入操作其实非常简单，它主要会先检查当前欲插入节点是插入点（插入点是欲插入点的父结点）的左子节点还是右子节点，然后进入对应的分支完成插入工作并更新相应的指针，最后调用树形再平衡函数。
+实际的插入操作`_M_insert()`其实非常简单，它主要会先检查当前欲插入节点是插入点（插入点是欲插入点的父结点）的左子节点还是右子节点，然后进入对应的分支完成插入工作并更新相应的指针，最后调用树形再平衡函数。
 
 ```c++
 template <class _Key, class _Value, class _KeyOfValue, 
@@ -683,7 +685,7 @@ _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>
   _S_parent(__z) = __y;
   _S_left(__z) = 0;
   _S_right(__z) = 0;
-  // 维持红黑树平衡
+  // 维持红黑树平衡，进行树形调整
   _Rb_tree_rebalance(__z, _M_header->_M_parent);
   ++_M_node_count;
   return iterator(__z);
@@ -780,10 +782,10 @@ template <class _Key, class _Value, class _KeyOfValue,
 typename _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>::size_type 
 _Rb_tree<_Key,_Value,_KeyOfValue,_Compare,_Alloc>::erase(const _Key& __x)
 {
-  //获得指定键值结点在红黑树中的上边沿和下边沿
+  // 获得指定键值结点在红黑树中的上边沿和下边沿
   pair<iterator,iterator> __p = equal_range(__x);
   size_type __n = 0;
-  //获得待删除结点的个数
+  // 获得待删除结点的个数
   distance(__p.first, __p.second, __n);
   erase(__p.first, __p.second);
   return __n;
