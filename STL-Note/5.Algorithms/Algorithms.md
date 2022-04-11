@@ -998,21 +998,27 @@ bool binary_search(_ForwardIter __first, _ForwardIter __last,
 ```C++
 template <class _BidirectionalIter>
 bool next_permutation(_BidirectionalIter __first, _BidirectionalIter __last) {
+  // 元素若为空或元素只有一个，则直接返回
   if (__first == __last)
     return false;
   _BidirectionalIter __i = __first;
   ++__i;
   if (__i == __last)
     return false;
+  // 让__i指向最后一个元素
   __i = __last;
   --__i;
 
   for(;;) {
+    // __ii指向当前元素，__i指向前一元素
     _BidirectionalIter __ii = __i;
     --__i;
-    //从序列末尾开始找一个i，ii，使得*i < *ii
+    
+    // 实际上下面代码的目的是为了从序列末尾开始找一个__i，__ii，
+    // 使得*__i < *__ii
     if (*__i < *__ii) {
-      //从序列末尾开始找一个j，使得*j >= *i
+      // 从序列末尾开始找一个j，使得*j >= *i，因为__ii到末尾
+      // 之间的元素一定是逆序的，所以从右到左第一个即是
       _BidirectionalIter __j = __last;
       while (!(*__i < *--__j))
         {}
@@ -1021,6 +1027,7 @@ bool next_permutation(_BidirectionalIter __first, _BidirectionalIter __last) {
       return true;
     }
     if (__i == __first) {
+      // 如果整个序列都是正序的，那么直接反转即可
       reverse(__first, __last);
       return false;
     }
@@ -1028,7 +1035,7 @@ bool next_permutation(_BidirectionalIter __first, _BidirectionalIter __last) {
 }
 ```
 
-> 《剑指offer》的第38题就是在考察该算法知识点。
+> 《剑指offer》的第38题就是在考察该算法知识点以及[31. 下一个排列](https://leetcode-cn.com/problems/next-permutation/)。
 
 
 
